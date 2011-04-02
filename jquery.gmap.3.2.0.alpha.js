@@ -427,6 +427,15 @@
                 var gpoint = new $googlemaps.LatLng(marker.latitude, marker.longitude);
                 methods.processMarker.apply(this, [marker, gicon, gpoint]);
             }
+        },
+
+        removeAllMarkers: function () {
+            var markers = this.data('gmap').markers, i;
+
+            for(i = 0; i < markers.length; i += 1) {
+                markers[i].setMap(null);
+            }
+            markers = [];
         }
     };
 
