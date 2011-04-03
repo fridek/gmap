@@ -68,12 +68,13 @@
             },
 
             _onComplete: function () {
+                var $data = this.data('gmap'),
+                    that = this;
                 if($markersToLoad !== 0) {
-                    var that = this;
-                    window.setTimeout(function () {methods._onComplete.apply(that, [])}, 1000);
+                    window.setTimeout(function () { methods._onComplete.apply(that, [])}, 1000);
                     return;
                 }
-                opts.onComplete();
+                $data.opts.onComplete();
             },
 
             _setMapCenter: function (center) {
