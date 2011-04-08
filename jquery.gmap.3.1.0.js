@@ -3,8 +3,8 @@
  *
  * @url         http://www.smashinglabs.pl/gmap
  * @author      Sebastian Poreba <sebastian.poreba@gmail.com>
- * @version     3.1.0 beta 2
- * @date        03.04.2011
+ * @version     3.1.0 RC
+ * @date        09.04.2011
  */
 (function ($) {
 
