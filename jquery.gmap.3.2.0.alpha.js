@@ -4,11 +4,12 @@
  * @url         http://www.smashinglabs.pl/gmap
  * @author      Sebastian Poreba <sebastian.poreba@gmail.com>
  * @version     3.2.0 alpha
- * @date        31.03.2011
- *
- * JSLint tested (with exception of multiple var statements and underscores)
+ * @date        09.04.2011
  */
+/*jslint white: true, undef: true, regexp: true, plusplus: true, bitwise: true, newcap: true, strict: true, devel: true, maxerr: 50, indent: 4 */
+/*global window, jQuery, $, google, $googlemaps */
 (function ($) {
+    "use strict";
 
     var Cluster = function () {
         this.markers = [];
@@ -80,13 +81,14 @@
                         mapTypeId: opts.maptype,
                         scrollwheel: opts.scrollwheel
                     },
-                    i; //hoisting
+                    i,
+                    // Create map and set initial options
+                    $gmap = new $googlemaps.Map(this, mapOptions);
 
                 if (opts.log) {console.log('map center is:'); }
                 if (opts.log) {console.log(center); }
 
                 // Create map and set initial options
-                var $gmap = new $googlemaps.Map(this, mapOptions);
                 $this.data("$gmap", $gmap);
 
                 $this.data('gmap', {
@@ -128,8 +130,8 @@
         _onComplete: function () {
             var $data = this.data('gmap'),
                 that = this;
-            if($markersToLoad !== 0) {
-                window.setTimeout(function () { methods._onComplete.apply(that, [])}, 1000);
+            if ($markersToLoad !== 0) {
+                window.setTimeout(function () {methods._onComplete.apply(that, []); }, 1000);
                 return;
             }
             $data.opts.onComplete();
@@ -140,14 +142,15 @@
                 markers = $data.markers,
                 clusters = $data.clusters,
                 i,
-                j;
+                j,
+                viewport;
 
             for (i = 0; i < clusters.length; i += 1) {
                 clusters[i].getMarker().setMap(null);
             }
             clusters.length = 0;
 
-            var viewport = $data.gmap.getBounds();
+            viewport = $data.gmap.getBounds();
 
             if (!viewport) {
                 var that = this;
@@ -156,14 +159,15 @@
             }
 
             var ne = viewport.getNorthEast(),
-                sw = viewport.getSouthWest();
-            var width = ne.lat() - sw.lat(),
+                sw = viewport.getSouthWest(),
+                width = ne.lat() - sw.lat(),
                 // height = ne.lng() - sw.lng(), // unused
                 clusterable = [],
                 best,
-                bestDist;
-
-            var maxSize = width * opts.clusterSize / 100;
+                bestDist,
+                maxSize = width * opts.clusterSize / 100,
+                dist,
+                newCluster;
 
             for (i = 0; i < markers.length; i += 1) {
                 if (viewport.contains(markers[i].getPosition())) {
@@ -175,12 +179,11 @@
             if (opts.log) {console.log("number of markers " + clusterable.length + "/" + markers.length); }
             if (opts.log) {console.log('cluster radius: ' + maxSize); }
 
-
             for (i = 0; i < clusterable.length; i += 1) {
                 bestDist = 10000;
                 best = -1;
                 for (j = 0; j < clusters.length; j += 1) {
-                    var dist = clusters[j].dist(clusterable[i]);
+                    dist = clusters[j].dist(clusterable[i]);
                     if (dist < maxSize) {
                         bestDist = dist;
                         best = j;
@@ -188,7 +191,7 @@
                     }
                 }
                 if (best === -1) {
-                    var newCluster = new Cluster();
+                    newCluster = new Cluster();
                     newCluster.addMarker(clusterable[i]);
                     clusters.push(newCluster);
                 } else {
@@ -228,8 +231,10 @@
         _getMapCenter: function () {
             // Create new object to geocode addresses
 
-            var center, that = this, // 'that' scope fix in geocoding
-                i; //hoisting
+            var center,
+                that = this, // 'that' scope fix in geocoding
+                i,
+                selectedToCenter; //hoisting
             if (opts.latitude && opts.longitude) {
                 // lat & lng available, return
                 center = new $googlemaps.LatLng(opts.latitude, opts.longitude);
@@ -256,17 +261,26 @@
 
             // Check for a marker to center on (if no coordinates given)
             if ($.isArray(opts.markers) && opts.markers.length > 0) {
-                var selectedToCenter = null;
+                selectedToCenter = null;
+
                 for (i = 0; i < opts.markers.length; i += 1) {
-                    if (opts.markers[i].latitude && opts.markers[i].longitude) {
+                    if(opts.markers[i].setCenter) {
                         selectedToCenter = opts.markers[i];
                         break;
                     }
-                    if (opts.markers[i].address) {
-                        selectedToCenter = opts.markers[i];
-                    }
                 }
 
+                if (selectedToCenter === null) {
+                    for (i = 0; i < opts.markers.length; i += 1) {
+                        if (opts.markers[i].latitude && opts.markers[i].longitude) {
+                            selectedToCenter = opts.markers[i];
+                            break;
+                        }
+                        if (opts.markers[i].address) {
+                            selectedToCenter = opts.markers[i];
+                        }
+                    }
+                }
                 // failed to find any reasonable marker (it's quite impossible BTW)
                 if (selectedToCenter === null) {
                     return center;
@@ -347,7 +361,7 @@
 
                 $googlemaps.event.addListener(gmarker, 'click', function () {
                     if (opts.log) {console.log('opening popup ' + marker.html); }
-                    if (opts.singleInfoWindow && $data.infoWindow) {$data.infoWindow.close();}
+                    if (opts.singleInfoWindow && $data.infoWindow) {$data.infoWindow.close(); }
                     infoWindow.open($gmap, gmarker);
                     $data.infoWindow = infoWindow;
                 });
@@ -395,7 +409,6 @@
 
                 _gicon.iconAnchor = ($.isArray(marker.icon.iconanchor)) ? new $googlemaps.Point(marker.icon.iconanchor[0], marker.icon.iconanchor[1]) : marker.icon.iconanchor;
                 _gicon.infoWindowAnchor = ($.isArray(marker.icon.infowindowanchor)) ? new $googlemaps.Size(marker.icon.infowindowanchor[0], marker.icon.infowindowanchor[1]) : marker.icon.infowindowanchor;
-
             }
 
             var gicon = new $googlemaps.MarkerImage(_gicon.image, _gicon.iconSize, null, _gicon.iconAnchor);
@@ -433,7 +446,7 @@
         removeAllMarkers: function () {
             var markers = this.data('gmap').markers, i;
 
-            for(i = 0; i < markers.length; i += 1) {
+            for (i = 0; i < markers.length; i += 1) {
                 markers[i].setMap(null);
             }
             markers = [];
@@ -471,7 +484,7 @@
         scaleControl:            false,
         streetViewControl:       true,
 
-        singleInfoWindow:           true,
+        singleInfoWindow:        true,
 
         html_prepend:            '<div class="gmap_marker">',
         html_append:             '</div>',
@@ -482,7 +495,7 @@
             infowindowanchor:    [9, 2]
         },
 
-        onComplete:              function() {},
+        onComplete:              function () {},
 
         clustering: false,
         fastClustering: false,
