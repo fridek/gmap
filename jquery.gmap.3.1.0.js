@@ -3,8 +3,8 @@
  *
  * @url         http://www.smashinglabs.pl/gmap
  * @author      Sebastian Poreba <sebastian.poreba@gmail.com>
- * @version     3.1.0 RC
- * @date        09.04.2011
+ * @version     3.1.0 RC2
+ * @date        13.04.2011
  */
 (function ($) {
 
@@ -17,6 +17,13 @@
             init: function (options) {
                 // Build main options before element iteration
                 opts = $.extend({}, $.fn.gMap.defaults, options);
+
+                // recover icon array
+                for(var k in $.fn.gMap.defaults.icon) {
+                    if(!opts.icon[k]) {
+                        opts.icon[k] = $.fn.gMap.defaults.icon[k];
+                    }
+                }
 
                 // Iterate through each element
                 return this.each(function () {
@@ -165,7 +172,7 @@
                 return center;
             },
 
-            processMarker: function (marker, gicon, location) {
+            processMarker: function (marker, gicon, gshadow, location) {
                 var $data = this.data('gmap'),
                     $gmap = $data.gmap;
 
@@ -173,15 +180,24 @@
                     location = new $googlemaps.LatLng(marker.latitude, marker.longitude);
                 }
 
-                if (gicon === undefined) {
-                    var _gicon = {};
+                if (!gicon) {
 
                     // Set icon properties from global options
-                    _gicon.image = opts.icon.image;
-                    _gicon.iconSize = ($.isArray(opts.icon.iconsize)) ? new $googlemaps.Size(opts.icon.iconsize[0], opts.icon.iconsize[1]) : opts.icon.iconsize;
-                    _gicon.iconAnchor = ($.isArray(opts.icon.iconanchor)) ? new $googlemaps.Point(opts.icon.iconanchor[0], opts.icon.iconanchor[1]) : opts.icon.iconanchor;
-
+                    var _gicon = {
+                        image: opts.icon.image,
+                        iconSize: new $googlemaps.Size(opts.icon.iconsize[0], opts.icon.iconsize[1]),
+                        iconAnchor: new $googlemaps.Point(opts.icon.iconanchor[0], opts.icon.iconanchor[1]),
+                        infoWindowAnchor: new $googlemaps.Size(opts.icon.infowindowanchor[0], opts.icon.infowindowanchor[1])
+                    };
                     gicon = new $googlemaps.MarkerImage(_gicon.image, _gicon.iconSize, null, _gicon.iconAnchor);
+                }
+
+                if (!gshadow) {
+                    var _gshadow = {
+                        image: opts.icon.shadow,
+                        iconSize: new $googlemaps.Size(opts.icon.shadowsize[0], opts.icon.shadowsize[1]),
+                        anchor: (_gicon && _gicon.iconAnchor)?_gicon.iconAnchor:new $googlemaps.Point(opts.icon.iconanchor[0], opts.icon.iconanchor[1])
+                    };
                 }
 
                 var gmarker = new $googlemaps.Marker({
@@ -190,6 +206,7 @@
                     title: marker.title,
                     map: $gmap
                 });
+                gmarker.setShadow(gshadow);
 
                 $data.markers.push(gmarker);
 
@@ -219,14 +236,14 @@
 
             },
 
-            _geocodeMarker: function (marker, gicon) {
+            _geocodeMarker: function (marker, gicon, gshadow) {
                 $markersToLoad += 1;
                 var that = this;
 
                 $geocoder.geocode({'address': marker.address}, function(results, status) {
                     $markersToLoad -= 1;
                     if (status === $googlemaps.GeocoderStatus.OK) {
-                        methods.processMarker.apply( that, [marker, gicon, results[0].geometry.location] );
+                        methods.processMarker.apply( that, [marker, gicon, gshadow, results[0].geometry.location] );
                     } else {
                         if (opts.log) {console.log("Geocode was not successful for the following reason: " + status);}
                     }
@@ -237,28 +254,36 @@
                 if (opts.log) {console.log("putting marker at " + marker.latitude + ', ' + marker.longitude + " with address " + marker.address + " and html "  + marker.html);}
 
                 // Create new icon
-                var _gicon = {};
-
                 // Set icon properties from global options
-                _gicon.image = opts.icon.image;
-                _gicon.iconSize = ($.isArray(opts.icon.iconsize)) ? new $googlemaps.Size(opts.icon.iconsize[0], opts.icon.iconsize[1]) : opts.icon.iconsize;
-
-                _gicon.iconAnchor = ($.isArray(opts.icon.iconanchor)) ? new $googlemaps.Point(opts.icon.iconanchor[0], opts.icon.iconanchor[1]) : opts.icon.iconanchor;
-                _gicon.infoWindowAnchor = ($.isArray(opts.icon.infowindowanchor)) ? new $googlemaps.Size(opts.icon.infowindowanchor[0], opts.icon.infowindowanchor[1]) : opts.icon.infowindowanchor;
+                var _gicon = {
+                    image: opts.icon.image,
+                    iconSize: new $googlemaps.Size(opts.icon.iconsize[0], opts.icon.iconsize[1]),
+                    iconAnchor: new $googlemaps.Point(opts.icon.iconanchor[0], opts.icon.iconanchor[1]),
+                    infoWindowAnchor: new $googlemaps.Size(opts.icon.infowindowanchor[0], opts.icon.infowindowanchor[1])
+                },
+                _gshadow = {
+                    image: opts.icon.shadow,
+                    iconSize: new $googlemaps.Size(opts.icon.shadowsize[0], opts.icon.shadowsize[1]),
+                    anchor: _gicon.iconAnchor
+                };
+                
                 // not very nice, but useful
                 marker.infoWindowAnchor = _gicon.infoWindowAnchor;
 
                 if (marker.icon) {
                     // Overwrite global options
-                    _gicon.image = marker.icon.image;
-                    _gicon.iconSize = ($.isArray(marker.icon.iconsize)) ? new $googlemaps.Size(marker.icon.iconsize[0], marker.icon.iconsize[1]) : marker.icon.iconsize;
+                    if (marker.icon.image) { _gicon.image = marker.icon.image; }
+                    if (marker.icon.iconsize) { _gicon.iconSize = new $googlemaps.Size(marker.icon.iconsize[0], marker.icon.iconsize[1]); }
 
-                    _gicon.iconAnchor = ($.isArray(marker.icon.iconanchor)) ? new $googlemaps.Point(marker.icon.iconanchor[0], marker.icon.iconanchor[1]) : marker.icon.iconanchor;
-                    _gicon.infoWindowAnchor = ($.isArray(marker.icon.infowindowanchor)) ? new $googlemaps.Size(marker.icon.infowindowanchor[0], marker.icon.infowindowanchor[1]) : marker.icon.infowindowanchor;
-
+                    if (marker.icon.iconanchor) { _gicon.iconAnchor = new $googlemaps.Point(marker.icon.iconanchor[0], marker.icon.iconanchor[1]); }
+                    if (marker.icon.infowindowanchor) { _gicon.infoWindowAnchor = new $googlemaps.Size(marker.icon.infowindowanchor[0], marker.icon.infowindowanchor[1]); }
+                
+                    if (marker.icon.shadow) { _gshadow.image = marker.icon.shadow; }
+                    if (marker.icon.shadowsize) { _gshadow.iconSize = new $googlemaps.Size(marker.icon.shadowsize[0], marker.icon.shadowsize[1]); }
                 }
-
+                
                 var gicon = new $googlemaps.MarkerImage(_gicon.image, _gicon.iconSize, null, _gicon.iconAnchor);
+                var gshadow = new $googlemaps.MarkerImage( _gshadow.image,_gshadow.iconSize, null, _gshadow.anchor);
 
                 // Check if address is available
                 if (marker.address) {
@@ -273,7 +298,7 @@
 
                     if (opts.log) {console.log('geocoding marker: ' + marker.address);}
                     // Get the point for given address
-                    methods._geocodeMarker.apply( this, [marker, gicon] );
+                    methods._geocodeMarker.apply( this, [marker, gicon, gshadow] );
                 }
                 else {
                     // Check for reference to the marker's latitude/longitude
@@ -287,7 +312,7 @@
 
                     // Create marker
                     var gpoint = new $googlemaps.LatLng(marker.latitude, marker.longitude);
-                    methods.processMarker.apply(this, [marker, gicon, gpoint] );
+                    methods.processMarker.apply(this, [marker, gicon, gshadow, gpoint] );
                 }
             },
 
@@ -340,7 +365,9 @@
             image:               "http://www.google.com/mapfiles/marker.png",
             iconsize:            [20, 34],
             iconanchor:          [9, 34],
-            infowindowanchor:    [9, 2]
+            infowindowanchor:    [9, 2],
+            shadow:              "http://www.google.com/mapfiles/shadow50.png",
+            shadowsize:          [37, 34]
         },
 
         onComplete:              function() {}
