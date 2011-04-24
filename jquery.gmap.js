@@ -4,7 +4,7 @@
  * @url         http://www.smashinglabs.pl/gmap
  * @author      Sebastian Poreba <sebastian.poreba@gmail.com>
  * @version     3.2.0 alpha
- * @date        23.04.2011
+ * @date        24.04.2011
  */
 /*jslint white: true, undef: true, regexp: true, plusplus: true, bitwise: true, newcap: true, strict: true, devel: true, maxerr: 50, indent: 4 */
 /*global window, jQuery, $, google, $googlemaps */
@@ -40,7 +40,8 @@
         if (this.mainmarker) {return this.mainmarker; }
 
         if (this.markers.length > 1) {
-            var gicon = new $googlemaps.MarkerImage("/smashinglabs/images/gmap_pin_orange.png");
+//            var gicon = new $googlemaps.MarkerImage(opts.clusterIcon);
+            var gicon = new $googlemaps.MarkerImage("http://thydzik.com/thydzikGoogleMap/markerlink.php?text=" + this.markers.length + "&color=EF9D3F");
             this.mainmarker = new $googlemaps.Marker({
                 position: this.markers[0].getPosition(),
                 icon: gicon,
@@ -76,8 +77,24 @@
             return this.each(function () {
                 var $this = $(this),
                     center = methods._getMapCenter.apply($this, []),
+                    boundaries, resX, resY, baseScale = 39135.758482,
+                    i;
 
-                    mapOptions = {
+                if(opts.zoom == "fit") {
+                    boundaries = methods._getBoundaries();
+                    resX = (boundaries.E - boundaries.W) * 111000 / $this.width();
+                    resY = (boundaries.S - boundaries.N) * 111000 / $this.height();
+
+                    for(i = 2;i < 20; i += 1) {
+                        if(resX > baseScale || resY > baseScale) {
+                            break;
+                        }
+                        baseScale = baseScale/2;
+                    }
+                    opts.zoom = i - 2;
+                }
+
+                var  mapOptions = {
                         zoom: opts.zoom,
                         center: center,
                         mapTypeControl: opts.mapTypeControl,
@@ -88,7 +105,6 @@
                         mapTypeId: opts.maptype,
                         scrollwheel: opts.scrollwheel
                     },
-                    i,
                     // Create map and set initial options
                     $gmap = new $googlemaps.Map(this, mapOptions);
 
@@ -225,6 +241,28 @@
             }
         },
 
+        _boundaries: null,
+        
+        _getBoundaries: function () {
+            if(methods._boundaries) {return methods._boundaries; }
+
+                var mostN = opts.markers[0].latitude,
+                    mostE = opts.markers[0].longitude,
+                    mostW = opts.markers[0].longitude,
+                    mostS = opts.markers[0].latitude,
+                    i;
+
+                for (i = 1; i < opts.markers.length; i += 1) {
+                    if(mostN > opts.markers[i].latitude) {mostN = opts.markers[i].latitude; }
+                    if(mostE < opts.markers[i].longitude) {mostE = opts.markers[i].longitude; }
+                    if(mostW > opts.markers[i].longitude) {mostW = opts.markers[i].longitude; }
+                    if(mostS < opts.markers[i].latitude) {mostS = opts.markers[i].latitude; }
+                }
+
+            methods._boundaries = {N: mostN, E: mostE, W: mostW, S: mostS};
+            return methods._boundaries;
+        },
+
         /**
          * Priorities order:
          * - latitude & longitude in options
@@ -242,7 +280,15 @@
             var center,
                 that = this, // 'that' scope fix in geocoding
                 i,
-                selectedToCenter; //hoisting
+                selectedToCenter,
+                most; //hoisting
+
+            if (opts.markers.length && (opts.latitude == "fit" || opts.longitude == "fit")) {
+                most = methods._getBoundaries();
+                center = new $googlemaps.LatLng((most.N + most.S)/2, (most.E + most.W)/2);
+                return center;
+            }
+
             if (opts.latitude && opts.longitude) {
                 // lat & lng available, return
                 center = new $googlemaps.LatLng(opts.latitude, opts.longitude);
@@ -268,7 +314,7 @@
             }
 
             // Check for a marker to center on (if no coordinates given)
-            if ($.isArray(opts.markers) && opts.markers.length > 0) {
+            if (opts.markers.length > 0) {
                 selectedToCenter = null;
 
                 for (i = 0; i < opts.markers.length; i += 1) {
