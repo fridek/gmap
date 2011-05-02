@@ -41,7 +41,9 @@
                             scaleControl : opts.scaleControl,
                             streetViewControl: opts.streetViewControl,
                             mapTypeId: opts.maptype,
-                            scrollwheel: opts.scrollwheel
+                            scrollwheel: opts.scrollwheel,
+                            maxZoom: opts.maxZoom,
+                            minZoom: opts.minZoom
                         };
 
                     if (opts.log) {console.log('map center is:');}
@@ -348,6 +350,8 @@
         latitude:                null,
         longitude:               null,
         zoom:                    3,
+        maxZoom: 				 null,
+        minZoom: 				 null, 
         markers:                 [],
         controls:                {},
         scrollwheel:             true,
