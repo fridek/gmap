@@ -11,50 +11,6 @@
 (function ($) {
     "use strict";
 
-    var Cluster = function () {
-        this.markers = [];
-        this.mainMarker = false;
-    };
-
-    /**
-     * For iterating over all clusters to find if any is close enough to be merged with marker
-     *
-     * @param marker
-     * @param currentSize - calculated as viewport percentage (opts.clusterSize)
-     * @return bool
-     */
-    Cluster.prototype.dist = function (marker) {
-        return Math.sqrt(Math.pow(this.markers[0].getPosition().lat() - marker.getPosition().lat(), 2) +
-            Math.pow(this.markers[0].getPosition().lng() - marker.getPosition().lng(), 2));
-    };
-
-    Cluster.prototype.addMarker = function (marker) {
-        this.markers.push(marker);
-    };
-
-    /**
-     * returns one marker if there is only one or
-     * returns special cloister marker if there are more
-     */
-    Cluster.prototype.getMarker = function () {
-        if (this.mainmarker) {return this.mainmarker; }
-
-        if (this.markers.length > 1) {
-//            var gicon = new $googlemaps.MarkerImage(opts.clusterIcon);
-            var gicon = new $googlemaps.MarkerImage("http://thydzik.com/thydzikGoogleMap/markerlink.php?text=" + this.markers.length + "&color=EF9D3F");
-            this.mainmarker = new $googlemaps.Marker({
-                position: this.markers[0].getPosition(),
-                icon: gicon,
-                title: "cluster of " + this.markers.length + " markers",
-                map: null
-            });
-            return this.mainmarker;
-        } else {
-            return this.markers[0];
-        }
-    };
-
-
     // global google maps objects
     var $googlemaps = google.maps,
         $geocoder = new $googlemaps.Geocoder(),
@@ -121,8 +77,7 @@
                     'gmap': $gmap,
                     'markers': [],
                     'markerKeys' : {},
-                    'infoWindow': null,
-                    'clusters': []
+                    'infoWindow': null
                 });
 
                 // Check for map controls
@@ -140,14 +95,6 @@
                     }
                 }
 
-                if (opts.clustering) {
-                    methods.renderCluster.apply($this, []);
-
-                    $googlemaps.event.addListener($gmap, 'zoom_changed', function () {
-                        methods.renderCluster.apply($this, []);
-                    });
-                }
-
                 methods._onComplete.apply($this, []);
             });
         },
@@ -160,75 +107,6 @@
                 return;
             }
             $data.opts.onComplete();
-        },
-
-        renderCluster: function () {
-            var $data = this.data('gmap'),
-                markers = $data.markers,
-                clusters = $data.clusters,
-                i,
-                j,
-                viewport;
-
-            for (i = 0; i < clusters.length; i += 1) {
-                clusters[i].getMarker().setMap(null);
-            }
-            clusters.length = 0;
-
-            viewport = $data.gmap.getBounds();
-
-            if (!viewport) {
-                var that = this;
-                window.setTimeout(function () {methods.renderCluster.apply(that); }, 1000);
-                return;
-            }
-
-            var ne = viewport.getNorthEast(),
-                sw = viewport.getSouthWest(),
-                width = ne.lat() - sw.lat(),
-                // height = ne.lng() - sw.lng(), // unused
-                clusterable = [],
-                best,
-                bestDist,
-                maxSize = width * opts.clusterSize / 100,
-                dist,
-                newCluster;
-
-            for (i = 0; i < markers.length; i += 1) {
-                if (viewport.contains(markers[i].getPosition())) {
-                    clusterable.push(markers[i]);
-                } else {
-                    markers[i].setMap(null);
-                }
-            }
-            if (opts.log) {console.log("number of markers " + clusterable.length + "/" + markers.length); }
-            if (opts.log) {console.log('cluster radius: ' + maxSize); }
-
-            for (i = 0; i < clusterable.length; i += 1) {
-                bestDist = 10000;
-                best = -1;
-                for (j = 0; j < clusters.length; j += 1) {
-                    dist = clusters[j].dist(clusterable[i]);
-                    if (dist < maxSize) {
-                        bestDist = dist;
-                        best = j;
-                        if (opts.fastClustering) {break; }
-                    }
-                }
-                if (best === -1) {
-                    newCluster = new Cluster();
-                    newCluster.addMarker(clusterable[i]);
-                    clusters.push(newCluster);
-                } else {
-                    clusters[best].addMarker(clusterable[i]);
-                }
-            }
-
-            if (opts.log) {console.log("Total clusters in viewport: " + clusters.length); }
-
-            for (j = 0; j < clusters.length; j += 1) {
-                clusters[j].getMarker().setMap($data.gmap);
-            }
         },
 
         _setMapCenter: function (center) {
@@ -400,8 +278,6 @@
                     map: null
                 };
 
-            if (!opts.clustering) {markeropts.map = $gmap; }
-
             gmarker = new $googlemaps.Marker(markeropts);
             gmarker.setShadow(gshadow);
             $data.markers.push(gmarker);
@@ -570,11 +446,6 @@
             shadowsize:          [37, 34]
         },
 
-        onComplete:              function () {},
-
-        clustering: false,
-        fastClustering: false,
-        clusterCount: 10,
-        clusterSize: 40 //radius as % of viewport width
+        onComplete:              function () {}
     };
 }(jQuery));
