@@ -3,8 +3,8 @@
  *
  * @url         http://www.smashinglabs.pl/gmap
  * @author      Sebastian Poreba <sebastian.poreba@gmail.com>
- * @version     3.2.0 alpha
- * @date        24.04.2011
+ * @version     3.2.0 beta
+ * @date        26.05.2011
  */
 /*jslint white: true, undef: true, regexp: true, plusplus: true, bitwise: true, newcap: true, strict: true, devel: true, maxerr: 50, indent: 4 */
 /*global window, jQuery, $, google, $googlemaps */
@@ -63,11 +63,12 @@
         methods = {}; // for JSLint
     methods = {
         init: function (options) {
+            var k;
             // Build main options before element iteration
             opts = $.extend({}, $.fn.gMap.defaults, options);
 
                 // recover icon array
-                for(var k in $.fn.gMap.defaults.icon) {
+                for (k in $.fn.gMap.defaults.icon) {
                     if(!opts.icon[k]) {
                         opts.icon[k] = $.fn.gMap.defaults.icon[k];
                     }
@@ -80,16 +81,16 @@
                     boundaries, resX, resY, baseScale = 39135.758482,
                     i;
 
-                if(opts.zoom == "fit") {
+                if (opts.zoom == "fit") {
                     boundaries = methods._getBoundaries();
                     resX = (boundaries.E - boundaries.W) * 111000 / $this.width();
                     resY = (boundaries.S - boundaries.N) * 111000 / $this.height();
 
-                    for(i = 2;i < 20; i += 1) {
-                        if(resX > baseScale || resY > baseScale) {
+                    for(i = 2; i < 20; i += 1) {
+                        if (resX > baseScale || resY > baseScale) {
                             break;
                         }
-                        baseScale = baseScale/2;
+                        baseScale = baseScale / 2;
                     }
                     opts.zoom = i - 2;
                 }
@@ -119,6 +120,7 @@
                     'opts': opts,
                     'gmap': $gmap,
                     'markers': [],
+                    'markerKeys' : {},
                     'infoWindow': null,
                     'clusters': []
                 });
@@ -140,7 +142,6 @@
 
                 if (opts.clustering) {
                     methods.renderCluster.apply($this, []);
-
 
                     $googlemaps.event.addListener($gmap, 'zoom_changed', function () {
                         methods.renderCluster.apply($this, []);
@@ -365,7 +366,8 @@
         processMarker: function (marker, gicon, gshadow, location) {
             var $data = this.data('gmap'),
                 $gmap = $data.gmap,
-                gmarker;
+                gmarker,
+                markeropts;
 
             if (location === undefined) {
                 location = new $googlemaps.LatLng(marker.latitude, marker.longitude);
@@ -391,26 +393,19 @@
                 };
             }
 
-
-            if (opts.clustering) {
-                // create marker with no map set
-                gmarker = new $googlemaps.Marker({
+            markeropts = {
                     position: location,
                     icon: gicon,
-                    title: marker.html,
+                    title: marker.title,
                     map: null
-                });
-                gmarker.setShadow(gshadow);
-            } else {
-                gmarker = new $googlemaps.Marker({
-                    position: location,
-                    icon: gicon,
-                    title: marker.html,
-                    map: $gmap
-                });
-                gmarker.setShadow(gshadow);
-            }
+                };
+
+            if (!opts.clustering) {markeropts.map = $gmap; }
+
+            gmarker = new $googlemaps.Marker(markeropts);
+            gmarker.setShadow(gshadow);
             $data.markers.push(gmarker);
+            if(marker.key) {$data.markerKeys[marker.key] = gmarker; }
 
             // Set HTML and check if info window should be opened
             var infoWindow;
@@ -524,6 +519,10 @@
                 markers[i].setMap(null);
             }
             markers = [];
+        },
+
+        getMarker: function (key) {
+            return this.data('gmap').markerKeys[key];
         }
     };
 
