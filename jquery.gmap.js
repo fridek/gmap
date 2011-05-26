@@ -535,6 +535,16 @@
 
         getMarker: function (key) {
             return this.data('gmap').markerKeys[key];
+        },
+
+        fixAfterResize: function (nasty) {
+            var data = this.data('gmap');
+            $googlemaps.event.trigger(data.gmap, 'resize');
+
+            if(nasty) {
+                data.gmap.panTo(new google.maps.LatLng(0,0));
+            }
+            data.gmap.panTo(this.gMap('_getMapCenter', data.opts));
         }
     };
 
