@@ -6,7 +6,7 @@
  * @version     3.3.0 alpha
  * @date        26.05.2011
  */
-/*jslint white: true, undef: true, regexp: true, plusplus: true, bitwise: true, newcap: true, strict: true, devel: true, maxerr: 50, indent: 4 */
+/*jslint white: false, undef: true, regexp: true, plusplus: true, bitwise: true, newcap: true, strict: true, devel: true, maxerr: 50, indent: 4 */
 /*global window, jQuery, $, google, $googlemaps */
 (function ($) {
     "use strict";
@@ -14,6 +14,7 @@
     var Cluster = function () {
         this.markers = [];
         this.mainMarker = false;
+        this.icon = "http://www.google.com/mapfiles/marker.png";
     };
 
     /**
@@ -24,12 +25,16 @@
      * @return bool
      */
     Cluster.prototype.dist = function (marker) {
-        return Math.sqrt(Math.pow(this.markers[0].getPosition().lat() - marker.getPosition().lat(), 2) +
-            Math.pow(this.markers[0].getPosition().lng() - marker.getPosition().lng(), 2));
+        return Math.sqrt(Math.pow(this.markers[0].latitude - marker.latitude, 2) +
+            Math.pow(this.markers[0].longitude - marker.longitude, 2));
+    };
+
+    Cluster.prototype.setIcon = function (icon) {
+        this.icon = icon;
     };
 
     Cluster.prototype.addMarker = function (marker) {
-        this.markers.push(marker);
+        this.markers[this.markers.length] = marker;
     };
 
     /**
@@ -38,32 +43,32 @@
      */
     Cluster.prototype.getMarker = function () {
         if (this.mainmarker) {return this.mainmarker; }
-
+        var gicon, title;
         if (this.markers.length > 1) {
-//            var gicon = new $googlemaps.MarkerImage(opts.clusterIcon);
-            var gicon = new $googlemaps.MarkerImage("http://thydzik.com/thydzikGoogleMap/markerlink.php?text=" + this.markers.length + "&color=EF9D3F");
-            this.mainmarker = new $googlemaps.Marker({
-                position: this.markers[0].getPosition(),
-                icon: gicon,
-                title: "cluster of " + this.markers.length + " markers",
-                map: null
-            });
-            return this.mainmarker;
+            gicon = new $googlemaps.MarkerImage("http://thydzik.com/thydzikGoogleMap/markerlink.php?text=" + this.markers.length + "&color=EF9D3F");
+            title = "cluster of " + this.markers.length + " markers";
         } else {
-            return this.markers[0];
+            gicon = new $googlemaps.MarkerImage(this.icon);
+            title = this.markers[0].title;
         }
+        this.mainmarker = new $googlemaps.Marker({
+            position: new $googlemaps.LatLng(this.markers[0].latitude, this.markers[0].longitude),
+            icon: gicon,
+            title: title,
+            map: null
+        });
+        return this.mainmarker;
     };
 
 
     // global google maps objects
     var $googlemaps = google.maps,
         $geocoder = new $googlemaps.Geocoder(),
-        opts = {},
         $markersToLoad = 0,
         methods = {}; // for JSLint
     methods = {
         init: function (options) {
-            var k;
+            var k,
             // Build main options before element iteration
             opts = $.extend({}, $.fn.gMap.defaults, options);
 
@@ -77,12 +82,12 @@
             // Iterate through each element
             return this.each(function () {
                 var $this = $(this),
-                    center = methods._getMapCenter.apply($this, []),
+                    center = methods._getMapCenter.apply($this, [opts]),
                     boundaries, resX, resY, baseScale = 39135.758482,
-                    i;
+                    i, $data;
 
                 if (opts.zoom == "fit") {
-                    boundaries = methods._getBoundaries();
+                    boundaries = methods._getBoundaries(opts);
                     resX = (boundaries.E - boundaries.W) * 111000 / $this.width();
                     resY = (boundaries.S - boundaries.N) * 111000 / $this.height();
 
@@ -133,19 +138,21 @@
                     }
                 }
 
-                if (opts.markers.length !== 0) {
-                    // Loop through marker array
-                    for (i = 0; i < opts.markers.length; i += 1) {
-                        methods.addMarker.apply($this, [opts.markers[i]]);
-                    }
-                }
-
                 if (opts.clustering) {
+                    $data = $this.data('gmap');
+                    (function(markers) {$data.markers = markers;}(opts.markers));
                     methods.renderCluster.apply($this, []);
 
-                    $googlemaps.event.addListener($gmap, 'zoom_changed', function () {
+                    $googlemaps.event.addListener($gmap, 'bounds_changed', function () {
                         methods.renderCluster.apply($this, []);
                     });
+                } else {
+                    if (opts.markers.length !== 0) {
+                        // Loop through marker array
+                        for (i = 0; i < opts.markers.length; i += 1) {
+                            methods.addMarker.apply($this, [opts.markers[i]]);
+                        }
+                    }
                 }
 
                 methods._onComplete.apply($this, []);
@@ -166,6 +173,7 @@
             var $data = this.data('gmap'),
                 markers = $data.markers,
                 clusters = $data.clusters,
+                opts = $data.opts,
                 i,
                 j,
                 viewport;
@@ -195,12 +203,14 @@
                 newCluster;
 
             for (i = 0; i < markers.length; i += 1) {
-                if (viewport.contains(markers[i].getPosition())) {
-                    clusterable.push(markers[i]);
-                } else {
-                    markers[i].setMap(null);
+                if (markers[i].latitude < ne.lat() &&
+                    markers[i].latitude > sw.lat() &&
+                    markers[i].longitude < ne.lng() &&
+                    markers[i].longitude > sw.lng()) {
+                    clusterable[clusterable.length] = markers[i];
                 }
             }
+            
             if (opts.log) {console.log("number of markers " + clusterable.length + "/" + markers.length); }
             if (opts.log) {console.log('cluster radius: ' + maxSize); }
 
@@ -218,7 +228,7 @@
                 if (best === -1) {
                     newCluster = new Cluster();
                     newCluster.addMarker(clusterable[i]);
-                    clusters.push(newCluster);
+                    clusters[clusters.length] = newCluster;
                 } else {
                     clusters[best].addMarker(clusterable[i]);
                 }
@@ -232,8 +242,8 @@
         },
 
         _setMapCenter: function (center) {
-            if (opts.log) {console.log('delayed setMapCenter called'); }
             var $data = this.data('gmap');
+            if ($data.opts.log) {console.log('delayed setMapCenter called'); }
             if ($data.gmap !== undefined) {
                 $data.gmap.setCenter(center);
             } else {
@@ -244,21 +254,20 @@
 
         _boundaries: null,
         
-        _getBoundaries: function () {
+        _getBoundaries: function (opts) {
             if(methods._boundaries) {return methods._boundaries; }
+            var mostN = opts.markers[0].latitude,
+                mostE = opts.markers[0].longitude,
+                mostW = opts.markers[0].longitude,
+                mostS = opts.markers[0].latitude,
+                i;
 
-                var mostN = opts.markers[0].latitude,
-                    mostE = opts.markers[0].longitude,
-                    mostW = opts.markers[0].longitude,
-                    mostS = opts.markers[0].latitude,
-                    i;
-
-                for (i = 1; i < opts.markers.length; i += 1) {
-                    if(mostN > opts.markers[i].latitude) {mostN = opts.markers[i].latitude; }
-                    if(mostE < opts.markers[i].longitude) {mostE = opts.markers[i].longitude; }
-                    if(mostW > opts.markers[i].longitude) {mostW = opts.markers[i].longitude; }
-                    if(mostS < opts.markers[i].latitude) {mostS = opts.markers[i].latitude; }
-                }
+            for (i = 1; i < opts.markers.length; i += 1) {
+                if(mostN > opts.markers[i].latitude) {mostN = opts.markers[i].latitude; }
+                if(mostE < opts.markers[i].longitude) {mostE = opts.markers[i].longitude; }
+                if(mostW > opts.markers[i].longitude) {mostW = opts.markers[i].longitude; }
+                if(mostS < opts.markers[i].latitude) {mostS = opts.markers[i].latitude; }
+            }
 
             methods._boundaries = {N: mostN, E: mostE, W: mostW, S: mostS};
             return methods._boundaries;
@@ -275,7 +284,7 @@
          * Note: with geocoding returned value is (0,0) and callback sets map center. It's not very nice nor efficient.
          *       It is quite good idea to use only first option
          */
-        _getMapCenter: function () {
+        _getMapCenter: function (opts) {
             // Create new object to geocode addresses
 
             var center,
@@ -285,7 +294,7 @@
                 most; //hoisting
 
             if (opts.markers.length && (opts.latitude == "fit" || opts.longitude == "fit")) {
-                most = methods._getBoundaries();
+                most = methods._getBoundaries(opts);
                 center = new $googlemaps.LatLng((most.N + most.S)/2, (most.E + most.W)/2);
                 return center;
             }
@@ -366,6 +375,7 @@
         processMarker: function (marker, gicon, gshadow, location) {
             var $data = this.data('gmap'),
                 $gmap = $data.gmap,
+                opts = $data.opts,
                 gmarker,
                 markeropts;
 
@@ -442,12 +452,14 @@
                 if (status === $googlemaps.GeocoderStatus.OK) {
                     methods.processMarker.apply(that, [marker, gicon, results[0].geometry.location]);
                 } else {
-                    if (opts.log) {console.log("Geocode was not successful for the following reason: " + status); }
+                    if (this.data('gmap').opts.log) {console.log("Geocode was not successful for the following reason: " + status); }
                 }
             });
         },
 
         addMarker: function (marker) {
+            var opts = this.data('gmap').opts;
+            
             if (opts.log) {console.log("putting marker at " + marker.latitude + ', ' + marker.longitude + " with address " + marker.address + " and html "  + marker.html); }
 
             // Create new icon
