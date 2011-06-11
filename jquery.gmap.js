@@ -121,7 +121,7 @@
         },
 
         _boundaries: null,
-        
+
         _getBoundaries: function () {
             if(methods._boundaries) {return methods._boundaries; }
 
@@ -316,7 +316,7 @@
             $geocoder.geocode({'address': marker.address}, function (results, status) {
                 $markersToLoad -= 1;
                 if (status === $googlemaps.GeocoderStatus.OK) {
-                    methods.processMarker.apply(that, [marker, gicon, results[0].geometry.location]);
+                    methods.processMarker.apply(that, [marker, gicon, gshadow, results[0].geometry.location]);
                 } else {
                     if (opts.log) {console.log("Geocode was not successful for the following reason: " + status); }
                 }
