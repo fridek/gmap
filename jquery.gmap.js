@@ -275,7 +275,7 @@
                     position: location,
                     icon: gicon,
                     title: marker.title,
-                    map: null
+                    map: $gmap
                 };
 
             gmarker = new $googlemaps.Marker(markeropts);
