@@ -3,8 +3,8 @@
  *
  * @url         http://www.smashinglabs.pl/gmap
  * @author      Sebastian Poreba <sebastian.poreba@gmail.com>
- * @version     3.2.0 beta
- * @date        26.05.2011
+ * @version     3.2.0 beta2
+ * @date        11.06.2011
  */
 /*jslint white: true, undef: true, regexp: true, plusplus: true, bitwise: true, newcap: true, strict: true, devel: true, maxerr: 50, indent: 4 */
 /*global window, jQuery, $, google, $googlemaps */
