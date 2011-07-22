@@ -210,7 +210,7 @@
                     clusterable[clusterable.length] = markers[i];
                 }
             }
-            
+
             if (opts.log) {console.log("number of markers " + clusterable.length + "/" + markers.length); }
             if (opts.log) {console.log('cluster radius: ' + maxSize); }
 
@@ -253,7 +253,7 @@
         },
 
         _boundaries: null,
-        
+
         _getBoundaries: function (opts) {
             if(methods._boundaries) {return methods._boundaries; }
             var mostN = opts.markers[0].latitude,
@@ -419,9 +419,11 @@
 
             // Set HTML and check if info window should be opened
             var infoWindow;
+            //console.log(typeOf(marker.html));
             if (marker.html) {
+                var infoContent = typeof(marker.html) == "String" ? opts.html_prepend + marker.html + opts.html_append : marker.html;
                 var infoOpts = {
-                    content: opts.html_prepend + marker.html + opts.html_append,
+                    content: infoContent,
                     pixelOffset: marker.infoWindowAnchor
                 };
 
@@ -459,7 +461,7 @@
 
         addMarker: function (marker) {
             var opts = this.data('gmap').opts;
-            
+
             if (opts.log) {console.log("putting marker at " + marker.latitude + ', ' + marker.longitude + " with address " + marker.address + " and html "  + marker.html); }
 
             // Create new icon
