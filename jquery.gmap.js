@@ -10,11 +10,11 @@
 /*global window, jQuery, $, google, $googlemaps */
 (function ($) {
 
-    // global google maps objects
+    // global google maps objects 
     var $googlemaps = google.maps,
         $geocoder = new $googlemaps.Geocoder(),
-        opts = {},
-        $markersToLoad = 0,
+        opts = {},        
+        $markersToLoad = 0,        
         methods = {
             init: function (options) {
                 // Build main options before element iteration
@@ -28,12 +28,12 @@
                 }
 
                 // Iterate through each element
-                return this.each(function () {
+                return this.each(function () {                	
                     var $this = $(this),
-                        center = methods._getMapCenter.apply($this, []),
-
+                        center = methods._getMapCenter.apply($this, []),    
+                        mapZoom = (opts.zoom === "auto") ? 2 : opts.zoom,
                         mapOptions = {
-                            zoom: opts.zoom,
+                            zoom: mapZoom,
                             center: center,
                             mapTypeControl: opts.mapTypeControl,
                             zoomControl: opts.zoomControl,
@@ -57,6 +57,7 @@
                        'opts': opts,
                        'gmap': $gmap,
                        'markers': [],
+                       'markerKeys' : {},
                        'infoWindow': null
                     });
 
@@ -67,11 +68,13 @@
                             $gmap.controls[opts.controls[i].pos].push(opts.controls[i].div);
                         }
                     }
-                    if (opts.markers.length !== 0) {
-                        // Loop through marker array
-                        for (var i = 0; i < opts.markers.length; i+= 1) {
-                            methods.addMarker.apply($this,[opts.markers[i]]);
-                        }
+                    
+                    if (opts.markers !== 0){
+                    	methods.addMarkers.apply($this, [opts.markers]);
+                    }
+                    
+                    if (opts.zoom === "auto"){
+                    	methods.autoZoom.apply($this, []);
                     }
 
                     methods._onComplete.apply($this, []);
@@ -96,6 +99,16 @@
                 } else {
                     var that = this;
                     window.setTimeout(function() {methods._setMapCenter.apply(that,[center]);}, 500);
+                }
+                return this;
+            },
+            
+            setZoom: function (zoom) {
+            	var $map = this.data('$gmap');
+            	if (zoom === "auto"){
+                	methods.autoZoom.apply($(this), []);
+                } else {
+                	$map.setZoom(parseInt(zoom));
                 }
             },
 
@@ -176,6 +189,55 @@
                 return center;
             },
 
+			getRoute: function (options) {
+				
+				var $data = this.data('gmap'), 
+					$gmap = $data.gmap,
+					$directionsDisplay = new $googlemaps.DirectionsRenderer(),
+			        $directionsService = new $googlemaps.DirectionsService(),
+			        $travelModes = { 'BYCAR': $googlemaps.DirectionsTravelMode.DRIVING, 'BYBICYCLE': $googlemaps.DirectionsTravelMode.BICYCLING, 'BYFOOT': $googlemaps.DirectionsTravelMode.WALKING },
+			        $travelUnits = { 'MILES': $googlemaps.DirectionsUnitSystem.IMPERIAL, 'KM': $googlemaps.DirectionsUnitSystem.METRIC },
+					displayObj = null,
+					travelMode = null;
+					unitSystem = null;
+					
+				// look if there is an individual or otherwise a default object for this call to display route text informations
+				if(options.routeDisplay !== undefined){					
+					displayObj = (options.routeDisplay instanceof jQuery) ? options.routeDisplay[0] : ((typeof options.routeDisplay == "string") ? $(options.routeDisplay)[0] : null);
+				} else if($data.opts.routeDisplay !== null){
+					displayObj = ($data.opts.routeDisplay instanceof jQuery) ? $data.opts.routeDisplay[0] : ((typeof $data.opts.routeDisplay == "string") ? $($data.opts.routeDisplay)[0] : null);
+				} 
+				
+				// set route renderer to map
+				$directionsDisplay.setMap($gmap);
+				if(displayObj !== null){ 
+					$directionsDisplay.setPanel(displayObj);
+				}
+				
+				// get travel mode and unit
+				travelMode = ($travelModes[$data.opts.travelMode] !== undefined) ? $travelModes[$data.opts.travelMode] : $travelModes['BYCAR'];
+				travelUnit = ($travelUnits[$data.opts.travelUnit] !== undefined) ? $travelUnits[$data.opts.travelUnit] : $travelUnits['KM'];
+				
+				// build request
+				var request = {
+					origin: options.from,
+					destination: options.to,
+					travelMode: travelMode,
+					unitSystem: travelUnit,
+				};
+				
+				// send request
+				$directionsService.route(request, function(result, status) {
+					// show the rout or otherwise show an error message in a defined container for route text information 
+					if (status == $googlemaps.DirectionsStatus.OK) {
+						$directionsDisplay.setDirections(result);
+					} else if(displayObj !== null){						
+						$(displayObj).html($data.opts.routeErrors[status]);
+					}
+				});
+				return this;
+			},
+
             processMarker: function (marker, gicon, gshadow, location) {
                 var $data = this.data('gmap'),
                     $gmap = $data.gmap;
@@ -213,6 +275,7 @@
                 gmarker.setShadow(gshadow);
 
                 $data.markers.push(gmarker);
+                if(marker.key) {$data.markerKeys[marker.key] = gmarker; }
 
                 // Set HTML and check if info window should be opened
                 var infoWindow;
@@ -253,7 +316,44 @@
                     }
                 });
             },
-
+            
+            autoZoom: function (){
+				var markers = this.data('gmap').markers,				
+				$map = this.data('$gmap'),
+				bounds = new $googlemaps.LatLngBounds(),
+				that = this;
+				
+				// autoloop if there are still markers to load, for example of geocoding delays
+				if($markersToLoad !== 0) {
+                    window.setTimeout(function () { methods.autoZoom.apply(that, [])}, 500);
+                    return;
+                }
+				
+				if (opts.log) {console.log("autozooming map");}
+				
+				// get position from every marker and extend the "bounds" object with new coordinates
+				for(i = 0; i < markers.length; i += 1) {
+					bounds.extend(markers[i].getPosition()); 
+				}
+				
+				// if there were markers, now fit the bounds of the map
+				if(i>0){
+					$map.fitBounds(bounds);
+				}
+				return this;
+            },
+            
+            addMarkers: function (markers){        	
+            	if (markers.length !== 0) {
+            		if (opts.log) {console.log("adding " + markers.length +" markers");}
+                    // Loop through marker array
+                    for (var i = 0; i < markers.length; i+= 1) {
+                        methods.addMarker.apply($(this),[markers[i]]);
+                    }
+                }
+            	return this;
+            },
+            
             addMarker: function (marker) {
                 if (opts.log) {console.log("putting marker at " + marker.latitude + ', ' + marker.longitude + " with address " + marker.address + " and html "  + marker.html);}
 
@@ -318,6 +418,7 @@
                     var gpoint = new $googlemaps.LatLng(marker.latitude, marker.longitude);
                     methods.processMarker.apply(this, [marker, gicon, gshadow, gpoint] );
                 }
+                return this;
             },
 
             removeAllMarkers: function () {
@@ -327,6 +428,10 @@
                     markers[i].setMap(null);
                 }
                 markers = [];
+            },
+            
+            getMarker: function (key) {
+                return this.data('gmap').markerKeys[key];
             }
         };
 
@@ -376,6 +481,17 @@
             shadowsize:          [37, 34]
         },
 
-        onComplete:              function() {}
+        onComplete:              function() {},
+		travelMode:				 'BYCAR',
+		unitSystem:				 'KM',
+		routeDisplay:		 	 null,
+		routeErrors:			 { 
+									'INVALID_REQUEST': 'The provided request is invalid.',
+									'NOT_FOUND': 'One or more of the given addresses could not be found.',
+									'OVER_QUERY_LIMIT': 'A temporary error occured. Please try again in a few minutes.',
+									'REQUEST_DENIED': 'An error occured. Please contact us.',
+									'UNKNOWN_ERROR': 'An unknown error occured. Please try again.',
+									'ZERO_RESULTS': 'No route could be found within the given addresses.'
+								 }
     };
 }(jQuery));
