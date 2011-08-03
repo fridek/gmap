@@ -304,7 +304,7 @@
             },
 
             _geocodeMarker: function (marker, gicon, gshadow) {
-                $markersToLoad += 1;
+            	$markersToLoad += 1;
                 var that = this;
 
                 $geocoder.geocode({'address': marker.address}, function(results, status) {
@@ -318,7 +318,7 @@
             },
             
             autoZoom: function (){
-				var markers = this.data('gmap').markers,				
+                var markers = this.data('gmap').markers,
 				$map = this.data('$gmap'),
 				bounds = new $googlemaps.LatLngBounds(),
 				that = this;
@@ -483,7 +483,7 @@
 
         onComplete:              function() {},
 		travelMode:				 'BYCAR',
-		unitSystem:				 'KM',
+		travelUnit:				 'KM',
 		routeDisplay:		 	 null,
 		routeErrors:			 { 
 									'INVALID_REQUEST': 'The provided request is invalid.',
