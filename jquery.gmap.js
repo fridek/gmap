@@ -421,7 +421,7 @@
             var infoWindow;
             //console.log(typeOf(marker.html));
             if (marker.html) {
-                var infoContent = typeof(marker.html) == "String" ? opts.html_prepend + marker.html + opts.html_append : marker.html;
+                var infoContent = typeof(marker.html) === "string" ? opts.html_prepend + marker.html + opts.html_append : marker.html;
                 var infoOpts = {
                     content: infoContent,
                     pixelOffset: marker.infoWindowAnchor
