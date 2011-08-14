@@ -531,8 +531,9 @@
 
             for (i = 0; i < markers.length; i += 1) {
                 markers[i].setMap(null);
+                delete markers[i];
             }
-            markers = [];
+            markers.length = 0;
         },
 
         getMarker: function (key) {
