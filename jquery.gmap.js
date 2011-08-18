@@ -419,7 +419,6 @@
 
             // Set HTML and check if info window should be opened
             var infoWindow;
-            //console.log(typeOf(marker.html));
             if (marker.html) {
                 var infoContent = typeof(marker.html) === "string" ? opts.html_prepend + marker.html + opts.html_append : marker.html;
                 var infoOpts = {
@@ -441,6 +440,7 @@
             if (marker.html && marker.popup) {
                 if (opts.log) {console.log('opening popup ' + marker.html); }
                 infoWindow.open($gmap, gmarker);
+                $data.infoWindow = infoWindow;
             }
 
         },
