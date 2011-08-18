@@ -83,21 +83,10 @@
             return this.each(function () {
                 var $this = $(this),
                     center = methods._getMapCenter.apply($this, [opts]),
-                    boundaries, resX, resY, baseScale = 39135.758482,
                     i, $data;
 
                 if (opts.zoom == "fit") {
-                    boundaries = methods._getBoundaries(opts);
-                    resX = (boundaries.E - boundaries.W) * 111000 / $this.width();
-                    resY = (boundaries.S - boundaries.N) * 111000 / $this.height();
-
-                    for(i = 2; i < 20; i += 1) {
-                        if (resX > baseScale || resY > baseScale) {
-                            break;
-                        }
-                        baseScale = baseScale / 2;
-                    }
-                    opts.zoom = i - 2;
+                    opts.zoom = methods.autozoom.apply($this, []);
                 }
 
                 var  mapOptions = {
@@ -109,7 +98,9 @@
                         scaleControl : opts.scaleControl,
                         streetViewControl: opts.streetViewControl,
                         mapTypeId: opts.maptype,
-                        scrollwheel: opts.scrollwheel
+                        scrollwheel: opts.scrollwheel,
+                        maxZoom: opts.maxZoom,
+                        minZoom: opts.minZoom
                     },
                     // Create map and set initial options
                     $gmap = new $googlemaps.Map(this, mapOptions);
@@ -148,10 +139,7 @@
                     });
                 } else {
                     if (opts.markers.length !== 0) {
-                        // Loop through marker array
-                        for (i = 0; i < opts.markers.length; i += 1) {
-                            methods.addMarker.apply($this, [opts.markers[i]]);
-                        }
+                        methods.addMarkers.apply($this, [opts.markers]);
                     }
                 }
 
@@ -372,6 +360,56 @@
             return center;
         },
 
+        getRoute: function (options) {
+
+            var $data = this.data('gmap'),
+            $gmap = $data.gmap,
+            $directionsDisplay = new $googlemaps.DirectionsRenderer(),
+            $directionsService = new $googlemaps.DirectionsService(),
+            $travelModes = { 'BYCAR': $googlemaps.DirectionsTravelMode.DRIVING, 'BYBICYCLE': $googlemaps.DirectionsTravelMode.BICYCLING, 'BYFOOT': $googlemaps.DirectionsTravelMode.WALKING },
+            $travelUnits = { 'MILES': $googlemaps.DirectionsUnitSystem.IMPERIAL, 'KM': $googlemaps.DirectionsUnitSystem.METRIC },
+            displayObj = null,
+            travelMode = null,
+            travelUnit = null,
+            unitSystem = null;
+
+            // look if there is an individual or otherwise a default object for this call to display route text informations
+            if(options.routeDisplay !== undefined){
+                displayObj = (options.routeDisplay instanceof jQuery) ? options.routeDisplay[0] : ((typeof options.routeDisplay == "string") ? $(options.routeDisplay)[0] : null);
+            } else if($data.opts.routeDisplay !== null){
+                displayObj = ($data.opts.routeDisplay instanceof jQuery) ? $data.opts.routeDisplay[0] : ((typeof $data.opts.routeDisplay == "string") ? $($data.opts.routeDisplay)[0] : null);
+            }
+
+            // set route renderer to map
+            $directionsDisplay.setMap($gmap);
+            if(displayObj !== null){
+                $directionsDisplay.setPanel(displayObj);
+            }
+
+            // get travel mode and unit
+            travelMode = ($travelModes[$data.opts.travelMode] !== undefined) ? $travelModes[$data.opts.travelMode] : $travelModes['BYCAR'];
+            travelUnit = ($travelUnits[$data.opts.travelUnit] !== undefined) ? $travelUnits[$data.opts.travelUnit] : $travelUnits['KM'];
+
+            // build request
+            var request = {
+                origin: options.from,
+                destination: options.to,
+                travelMode: travelMode,
+                unitSystem: travelUnit,
+            };
+
+            // send request
+            $directionsService.route(request, function(result, status) {
+                // show the rout or otherwise show an error message in a defined container for route text information
+                if (status == $googlemaps.DirectionsStatus.OK) {
+                    $directionsDisplay.setDirections(result);
+                } else if(displayObj !== null){
+                    $(displayObj).html($data.opts.routeErrors[status]);
+                }
+            });
+            return this;
+        },
+
         processMarker: function (marker, gicon, gshadow, location) {
             var $data = this.data('gmap'),
                 $gmap = $data.gmap,
@@ -460,6 +498,41 @@
             });
         },
 
+        autoZoom: function (){
+            var data = this.data('gmap'),
+                markers = data.markers,
+                opts = data.opts,
+                that = this, i,
+                boundaries, resX, resY, baseScale = 39135.758482;
+
+            if (opts.log) {console.log("autozooming map");}
+
+            boundaries = methods._getBoundaries(opts);
+            resX = (boundaries.E - boundaries.W) * 111000 / this.width();
+            resY = (boundaries.S - boundaries.N) * 111000 / this.height();
+
+            for(i = 2; i < 20; i += 1) {
+                if (resX > baseScale || resY > baseScale) {
+                    break;
+                }
+                baseScale = baseScale / 2;
+            }
+            return i - 2;
+        },
+
+        addMarkers: function (markers){
+            var opts = this.data('gmap').opts;
+
+            if (markers.length !== 0) {
+                if (opts.log) {console.log("adding " + markers.length +" markers");}
+                // Loop through marker array
+                for (var i = 0; i < markers.length; i+= 1) {
+                    methods.addMarker.apply($(this),[markers[i]]);
+                }
+            }
+            return this;
+        },
+
         addMarker: function (marker) {
             var opts = this.data('gmap').opts;
 
@@ -525,6 +598,7 @@
                 var gpoint = new $googlemaps.LatLng(marker.latitude, marker.longitude);
                 methods.processMarker.apply(this, [marker, gicon, gshadow, gpoint]);
             }
+            return this;
         },
 
         removeAllMarkers: function () {
@@ -572,6 +646,8 @@
         latitude:                null,
         longitude:               null,
         zoom:                    3,
+        maxZoom: 				 null,
+        minZoom: 				 null,
         markers:                 [],
         controls:                {},
         scrollwheel:             true,
@@ -597,6 +673,18 @@
         },
 
         onComplete:              function () {},
+
+        travelMode:              'BYCAR',
+        travelUnit:              'KM',
+        routeDisplay:            null,
+		routeErrors:			 {
+                        		    'INVALID_REQUEST': 'The provided request is invalid.',
+                                    'NOT_FOUND': 'One or more of the given addresses could not be found.',
+                                    'OVER_QUERY_LIMIT': 'A temporary error occured. Please try again in a few minutes.',
+                                    'REQUEST_DENIED': 'An error occured. Please contact us.',
+                                    'UNKNOWN_ERROR': 'An unknown error occured. Please try again.',
+                                    'ZERO_RESULTS': 'No route could be found within the given addresses.'
+								 }
 
         clustering: false,
         fastClustering: false,
