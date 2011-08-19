@@ -1,12 +1,12 @@
-# gMap for V3 Google Maps API
+== gMap for V3 Google Maps API ==
 
 [http://www.smashinglabs.pl/gmap gMap] is a jQuery plugin embedding Google Maps into your website.
-  
-## Documentation
+
+== Documentation ==
 
 Check out gMap's documentation [http://www.smashinglabs.pl/gmap-documentation here]
 
-## Features
+== Features ==
 
 gMap allows you to:
 
