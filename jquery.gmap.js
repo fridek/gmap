@@ -14,12 +14,11 @@
     // global google maps objects
     var $googlemaps = google.maps,
         $geocoder = new $googlemaps.Geocoder(),
-        opts = {},
         $markersToLoad = 0,
         methods = {}; // for JSLint
     methods = {
         init: function (options) {
-            var k;
+            var k,
             // Build main options before element iteration
             opts = $.extend({}, $.fn.gMap.defaults, options);
 
@@ -33,22 +32,11 @@
             // Iterate through each element
             return this.each(function () {
                 var $this = $(this),
-                    center = methods._getMapCenter.apply($this, []),
-                    boundaries, resX, resY, baseScale = 39135.758482,
-                    i;
+                    center = methods._getMapCenter.apply($this, [opts]),
+                    i, $data;
 
                 if (opts.zoom == "fit") {
-                    boundaries = methods._getBoundaries();
-                    resX = (boundaries.E - boundaries.W) * 111000 / $this.width();
-                    resY = (boundaries.S - boundaries.N) * 111000 / $this.height();
-
-                    for(i = 2; i < 20; i += 1) {
-                        if (resX > baseScale || resY > baseScale) {
-                            break;
-                        }
-                        baseScale = baseScale / 2;
-                    }
-                    opts.zoom = i - 2;
+                    opts.zoom = methods.autoZoom.apply($this, [opts]);
                 }
 
                 var  mapOptions = {
@@ -60,7 +48,9 @@
                         scaleControl : opts.scaleControl,
                         streetViewControl: opts.streetViewControl,
                         mapTypeId: opts.maptype,
-                        scrollwheel: opts.scrollwheel
+                        scrollwheel: opts.scrollwheel,
+                        maxZoom: opts.maxZoom,
+                        minZoom: opts.minZoom
                     },
                     // Create map and set initial options
                     $gmap = new $googlemaps.Map(this, mapOptions);
@@ -90,9 +80,7 @@
 
                 if (opts.markers.length !== 0) {
                     // Loop through marker array
-                    for (i = 0; i < opts.markers.length; i += 1) {
-                        methods.addMarker.apply($this, [opts.markers[i]]);
-                    }
+                    methods.addMarkers.apply($this, [opts.markers]);
                 }
 
                 methods._onComplete.apply($this, []);
@@ -110,8 +98,8 @@
         },
 
         _setMapCenter: function (center) {
-            if (opts.log) {console.log('delayed setMapCenter called'); }
             var $data = this.data('gmap');
+            if ($data.opts.log) {console.log('delayed setMapCenter called'); }
             if ($data.gmap !== undefined) {
                 $data.gmap.setCenter(center);
             } else {
@@ -122,21 +110,20 @@
 
         _boundaries: null,
 
-        _getBoundaries: function () {
+        _getBoundaries: function (opts) {
             if(methods._boundaries) {return methods._boundaries; }
+            var mostN = opts.markers[0].latitude,
+                mostE = opts.markers[0].longitude,
+                mostW = opts.markers[0].longitude,
+                mostS = opts.markers[0].latitude,
+                i;
 
-                var mostN = opts.markers[0].latitude,
-                    mostE = opts.markers[0].longitude,
-                    mostW = opts.markers[0].longitude,
-                    mostS = opts.markers[0].latitude,
-                    i;
-
-                for (i = 1; i < opts.markers.length; i += 1) {
-                    if(mostN > opts.markers[i].latitude) {mostN = opts.markers[i].latitude; }
-                    if(mostE < opts.markers[i].longitude) {mostE = opts.markers[i].longitude; }
-                    if(mostW > opts.markers[i].longitude) {mostW = opts.markers[i].longitude; }
-                    if(mostS < opts.markers[i].latitude) {mostS = opts.markers[i].latitude; }
-                }
+            for (i = 1; i < opts.markers.length; i += 1) {
+                if(mostN > opts.markers[i].latitude) {mostN = opts.markers[i].latitude; }
+                if(mostE < opts.markers[i].longitude) {mostE = opts.markers[i].longitude; }
+                if(mostW > opts.markers[i].longitude) {mostW = opts.markers[i].longitude; }
+                if(mostS < opts.markers[i].latitude) {mostS = opts.markers[i].latitude; }
+            }
 
             methods._boundaries = {N: mostN, E: mostE, W: mostW, S: mostS};
             return methods._boundaries;
@@ -153,7 +140,7 @@
          * Note: with geocoding returned value is (0,0) and callback sets map center. It's not very nice nor efficient.
          *       It is quite good idea to use only first option
          */
-        _getMapCenter: function () {
+        _getMapCenter: function (opts) {
             // Create new object to geocode addresses
 
             var center,
@@ -163,7 +150,7 @@
                 most; //hoisting
 
             if (opts.markers.length && (opts.latitude == "fit" || opts.longitude == "fit")) {
-                most = methods._getBoundaries();
+                most = methods._getBoundaries(opts);
                 center = new $googlemaps.LatLng((most.N + most.S)/2, (most.E + most.W)/2);
                 return center;
             }
@@ -241,9 +228,68 @@
             return center;
         },
 
+        setZoom: function (zoom) {
+            var $map = this.data('gmap').gmap;
+            if (zoom === "fit"){
+                zoom = methods.autoZoom.apply($(this), []);
+            }
+            $map.setZoom(parseInt(zoom));
+        },
+
+        getRoute: function (options) {
+
+            var $data = this.data('gmap'),
+            $gmap = $data.gmap,
+            $directionsDisplay = new $googlemaps.DirectionsRenderer(),
+            $directionsService = new $googlemaps.DirectionsService(),
+            $travelModes = { 'BYCAR': $googlemaps.DirectionsTravelMode.DRIVING, 'BYBICYCLE': $googlemaps.DirectionsTravelMode.BICYCLING, 'BYFOOT': $googlemaps.DirectionsTravelMode.WALKING },
+            $travelUnits = { 'MILES': $googlemaps.DirectionsUnitSystem.IMPERIAL, 'KM': $googlemaps.DirectionsUnitSystem.METRIC },
+            displayObj = null,
+            travelMode = null,
+            travelUnit = null,
+            unitSystem = null;
+
+            // look if there is an individual or otherwise a default object for this call to display route text informations
+            if(options.routeDisplay !== undefined){
+                displayObj = (options.routeDisplay instanceof jQuery) ? options.routeDisplay[0] : ((typeof options.routeDisplay == "string") ? $(options.routeDisplay)[0] : null);
+            } else if($data.opts.routeDisplay !== null){
+                displayObj = ($data.opts.routeDisplay instanceof jQuery) ? $data.opts.routeDisplay[0] : ((typeof $data.opts.routeDisplay == "string") ? $($data.opts.routeDisplay)[0] : null);
+            }
+
+            // set route renderer to map
+            $directionsDisplay.setMap($gmap);
+            if(displayObj !== null){
+                $directionsDisplay.setPanel(displayObj);
+            }
+
+            // get travel mode and unit
+            travelMode = ($travelModes[$data.opts.travelMode] !== undefined) ? $travelModes[$data.opts.travelMode] : $travelModes['BYCAR'];
+            travelUnit = ($travelUnits[$data.opts.travelUnit] !== undefined) ? $travelUnits[$data.opts.travelUnit] : $travelUnits['KM'];
+
+            // build request
+            var request = {
+                origin: options.from,
+                destination: options.to,
+                travelMode: travelMode,
+                unitSystem: travelUnit
+            };
+
+            // send request
+            $directionsService.route(request, function(result, status) {
+                // show the rout or otherwise show an error message in a defined container for route text information
+                if (status == $googlemaps.DirectionsStatus.OK) {
+                    $directionsDisplay.setDirections(result);
+                } else if(displayObj !== null){
+                    $(displayObj).html($data.opts.routeErrors[status]);
+                }
+            });
+            return this;
+        },
+
         processMarker: function (marker, gicon, gshadow, location) {
             var $data = this.data('gmap'),
                 $gmap = $data.gmap,
+                opts = $data.opts,
                 gmarker,
                 markeropts;
 
@@ -286,8 +332,9 @@
             // Set HTML and check if info window should be opened
             var infoWindow;
             if (marker.html) {
+                var infoContent = typeof(marker.html) === "string" ? opts.html_prepend + marker.html + opts.html_append : marker.html;
                 var infoOpts = {
-                    content: opts.html_prepend + marker.html + opts.html_append,
+                    content: infoContent,
                     pixelOffset: marker.infoWindowAnchor
                 };
 
@@ -305,6 +352,7 @@
             if (marker.html && marker.popup) {
                 if (opts.log) {console.log('opening popup ' + marker.html); }
                 infoWindow.open($gmap, gmarker);
+                $data.infoWindow = infoWindow;
             }
 
         },
@@ -316,14 +364,49 @@
             $geocoder.geocode({'address': marker.address}, function (results, status) {
                 $markersToLoad -= 1;
                 if (status === $googlemaps.GeocoderStatus.OK) {
+                    if (that.data('gmap').opts.log) {console.log("Geocode was successful with point: ", results[0].geometry.location); }
                     methods.processMarker.apply(that, [marker, gicon, gshadow, results[0].geometry.location]);
                 } else {
-                    if (opts.log) {console.log("Geocode was not successful for the following reason: " + status); }
+                    if (that.data('gmap').opts.log) {console.log("Geocode was not successful for the following reason: " + status); }
                 }
             });
         },
 
+        autoZoom: function (opts){
+            var data = this.data('gmap'),
+                i, boundaries, resX, resY, baseScale = 39135.758482;
+            opts = data?data.opts:opts
+            if (opts.log) {console.log("autozooming map");}
+
+            boundaries = methods._getBoundaries(opts);
+            resX = (boundaries.E - boundaries.W) * 111000 / this.width();
+            resY = (boundaries.S - boundaries.N) * 111000 / this.height();
+
+            for(i = 2; i < 20; i += 1) {
+                if (resX > baseScale || resY > baseScale) {
+                    break;
+                }
+                baseScale = baseScale / 2;
+            }
+            return i - 2;
+        },
+
+        addMarkers: function (markers){
+            var opts = this.data('gmap').opts;
+
+            if (markers.length !== 0) {
+                if (opts.log) {console.log("adding " + markers.length +" markers");}
+                // Loop through marker array
+                for (var i = 0; i < markers.length; i+= 1) {
+                    methods.addMarker.apply($(this),[markers[i]]);
+                }
+            }
+            return this;
+        },
+
         addMarker: function (marker) {
+            var opts = this.data('gmap').opts;
+
             if (opts.log) {console.log("putting marker at " + marker.latitude + ', ' + marker.longitude + " with address " + marker.address + " and html "  + marker.html); }
 
             // Create new icon
@@ -386,6 +469,7 @@
                 var gpoint = new $googlemaps.LatLng(marker.latitude, marker.longitude);
                 methods.processMarker.apply(this, [marker, gicon, gshadow, gpoint]);
             }
+            return this;
         },
 
         removeAllMarkers: function () {
@@ -393,8 +477,9 @@
 
             for (i = 0; i < markers.length; i += 1) {
                 markers[i].setMap(null);
+                delete markers[i];
             }
-            markers = [];
+            markers.length = 0;
         },
 
         getMarker: function (key) {
@@ -422,6 +507,8 @@
         latitude:                null,
         longitude:               null,
         zoom:                    3,
+        maxZoom: 				 null,
+        minZoom: 				 null,
         markers:                 [],
         controls:                {},
         scrollwheel:             true,
@@ -446,6 +533,19 @@
             shadowsize:          [37, 34]
         },
 
-        onComplete:              function () {}
+        onComplete:              function () {},
+
+        travelMode:              'BYCAR',
+        travelUnit:              'KM',
+        routeDisplay:            null,
+		routeErrors:			 {
+                        		    'INVALID_REQUEST': 'The provided request is invalid.',
+                                    'NOT_FOUND': 'One or more of the given addresses could not be found.',
+                                    'OVER_QUERY_LIMIT': 'A temporary error occured. Please try again in a few minutes.',
+                                    'REQUEST_DENIED': 'An error occured. Please contact us.',
+                                    'UNKNOWN_ERROR': 'An unknown error occured. Please try again.',
+                                    'ZERO_RESULTS': 'No route could be found within the given addresses.'
+								 }
+
     };
 }(jQuery));
