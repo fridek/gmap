@@ -86,7 +86,7 @@
                     i, $data;
 
                 if (opts.zoom == "fit") {
-                    opts.zoom = methods.autozoom.apply($this, []);
+                    opts.zoom = methods.autoZoom.apply($this, [opts]);
                 }
 
                 var  mapOptions = {
@@ -360,6 +360,14 @@
             return center;
         },
 
+        setZoom: function (zoom) {
+            var $map = this.data('gmap').gmap, zoom;
+            if (zoom === "fit"){
+                zoom = methods.autoZoom.apply($(this), []);
+            }
+            $map.setZoom(parseInt(zoom));
+        },
+
         getRoute: function (options) {
 
             var $data = this.data('gmap'),
@@ -395,7 +403,7 @@
                 origin: options.from,
                 destination: options.to,
                 travelMode: travelMode,
-                unitSystem: travelUnit,
+                unitSystem: travelUnit
             };
 
             // send request
@@ -498,12 +506,10 @@
             });
         },
 
-        autoZoom: function (){
+        autoZoom: function (opts){
             var data = this.data('gmap'),
-                markers = data.markers,
-                opts = data.opts,
-                that = this, i,
-                boundaries, resX, resY, baseScale = 39135.758482;
+                opts = data?data.opts:opts,
+                i, boundaries, resX, resY, baseScale = 39135.758482;
 
             if (opts.log) {console.log("autozooming map");}
 
@@ -684,7 +690,7 @@
                                     'REQUEST_DENIED': 'An error occured. Please contact us.',
                                     'UNKNOWN_ERROR': 'An unknown error occured. Please try again.',
                                     'ZERO_RESULTS': 'No route could be found within the given addresses.'
-								 }
+								 },
 
         clustering: false,
         fastClustering: false,

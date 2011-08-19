@@ -233,4 +233,159 @@
             }, 1000);
         }, 1000);
     });
+
+    module("Auto center/zoom");
+
+    test("all fit", function() {
+        map = createNewMap();
+        stop();
+        map.gMap({
+            markers: [
+                    {
+                        latitude: 50.083,
+                        longitude: 19.917
+                    },
+                    {
+                        latitude: 50.20917,
+                        longitude: 19.75435
+                    },
+                    {
+                        latitude: 50.502343,
+                        longitude: 19.91243
+                    }
+                ],
+            zoom: "fit",
+            latitude: "fit",
+            longitude: "fit",
+            onComplete: function() {
+                start();
+                var center = map.data('gmap').gmap.getCenter();
+                ok(Math.abs(center.lat() - (50.083 + 50.502343)/2) < 0.001, 'center latitude correct');
+                ok(Math.abs(center.lng() - (19.917 + 19.75435)/2) < 0.001, 'center longitude correct');
+            }
+        });
+    });
+
+    test("markers in viewport", function() {
+        map = createNewMap();
+        var markers = [
+                    {
+                        latitude: 50.083,
+                        longitude: 19.917
+                    },
+                    {
+                        latitude: 50.20917,
+                        longitude: 19.75435
+                    },
+                    {
+                        latitude: 50.502343,
+                        longitude: 19.91243
+                    }
+                ];
+        stop();
+        map.gMap({
+            markers: markers,
+            zoom: "fit",
+            latitude: "fit",
+            longitude: "fit",
+            onComplete: function() {
+                window.setTimeout(function() {
+                    var viewport = map.data('gmap').gmap.getBounds(),
+                        ne = viewport.getNorthEast(),
+                        sw = viewport.getSouthWest();
+                    for(var i = 0;i<markers.length;i++){
+                        ok(markers[i].latitude < ne.lat() &&
+                            markers[i].latitude > sw.lat() &&
+                            markers[i].longitude < ne.lng() &&
+                            markers[i].longitude > sw.lng(), 'marker ' + i + ' in viewport');
+                    }
+                    start();
+                },1000);
+            }
+        });
+    });
+
+    test("fit after load", function() {
+        map = createNewMap();
+        stop();
+        map.gMap({
+            markers: [
+                    {
+                        latitude: 50.083,
+                        longitude: 19.917
+                    },
+                    {
+                        latitude: 50.20917,
+                        longitude: 19.75435
+                    },
+                    {
+                        latitude: 50.502343,
+                        longitude: 19.91243
+                    }
+                ],
+            zoom: 10,
+            latitude: "fit",
+            longitude: "fit",
+            onComplete: function() {
+                start();
+                map.gMap('setZoom',"fit");
+                var center = map.data('gmap').gmap.getCenter();
+                ok(Math.abs(center.lat() - (50.083 + 50.502343)/2) < 0.001, 'center latitude correct');
+                ok(Math.abs(center.lng() - (19.917 + 19.75435)/2) < 0.001, 'center longitude correct');
+            }
+        });
+    });
+
+
+    test("markers not in viewport, fix after load", function() {
+        map = createNewMap();
+        var markers = [
+                    {
+                        latitude: 50.083,
+                        longitude: 19.917
+                    },
+                    {
+                        latitude: 50.20917,
+                        longitude: 19.75435
+                    },
+                    {
+                        latitude: 50.502343,
+                        longitude: 19.91243
+                    }
+                ];
+        stop();
+        map.gMap({
+            markers: markers,
+            zoom: 13,
+            latitude: "fit",
+            longitude: "fit",
+            onComplete: function() {
+                window.setTimeout(function() {
+                    var viewport = map.data('gmap').gmap.getBounds(),
+                        ne = viewport.getNorthEast(),
+                        sw = viewport.getSouthWest(), i;
+                    for(i = 0;i<markers.length;i++){
+                        ok(!(markers[i].latitude < ne.lat() &&
+                            markers[i].latitude > sw.lat() &&
+                            markers[i].longitude < ne.lng() &&
+                            markers[i].longitude > sw.lng()), 'marker ' + i + ' not in viewport');
+                    }
+
+                    map.gMap('setZoom',"fit");
+
+                    viewport = map.data('gmap').gmap.getBounds(),
+                    ne = viewport.getNorthEast(),
+                    sw = viewport.getSouthWest();
+                    for(i = 0;i<markers.length;i++){
+                        ok(markers[i].latitude < ne.lat() &&
+                            markers[i].latitude > sw.lat() &&
+                            markers[i].longitude < ne.lng() &&
+                            markers[i].longitude > sw.lng(), 'marker ' + i + ' in viewport');
+                    }
+                    start();
+                },1000);
+            }
+        });
+    });
+
 }());
