@@ -91,7 +91,6 @@
         ok(data.markers[0].getPosition().lat() && data.markers[0].getPosition().lng(), 'marker position correct');
     });
 
-
     test("removeAllMarkers", function() {
         map = createNewMap();
         map.gMap({
@@ -151,6 +150,36 @@
             }
         });
     });
+
+
+    test("map with 12 address markers (geocoding overflow)", function() {
+        map = createNewMap();
+        map.gMap({
+            markers: [
+                {address: 'Kraków, Chałubińskiego 11'},
+                {address: 'Kraków, Chałubińskiego 72'},
+                {address: 'Kraków, Chałubińskiego 43'},
+                {address: 'Kraków, Chałubińskiego 14'},
+                {address: 'Kraków, Chałubińskiego 65'},
+                {address: 'Kraków, Chałubińskiego 36'},
+                {address: 'Kraków, Chałubińskiego 17'},
+                {address: 'Kraków, Chałubińskiego 98'},
+                {address: 'Kraków, Chałubińskiego 99'},
+                {address: 'Kraków, Chałubińskiego 110'},
+                {address: 'Kraków, Chałubińskiego 111'},
+                {address: 'Kraków, Chałubińskiego 112'}
+            ],
+            zoom: 12,
+            onComplete: function() {
+                start();
+                data = map.data('gmap');
+                equal(data.markers.length, 12, '12 markers in data.markers');
+                ok(data.markers[11].getPosition().lat() && data.markers[11].getPosition().lng(), 'marker 11 position correct');
+            }
+        });
+        stop();
+    });
+
 
     module("Infowindow Test");
 
