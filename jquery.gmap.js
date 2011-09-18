@@ -4,7 +4,7 @@
  * @url         http://www.smashinglabs.pl/gmap
  * @author      Sebastian Poreba <sebastian.poreba@gmail.com>
  * @version     3.3.0 beta
- * @date        17.09.2011
+ * @date        18.09.2011
  */
 /*jslint white: false, undef: true, regexp: true, plusplus: true, bitwise: true, newcap: true, strict: true, devel: true, maxerr: 50, indent: 4 */
 /*global window, jQuery, $, google, $googlemaps */
@@ -185,22 +185,26 @@
          * calculate boundaries, optimised and independent from Google Maps
          */
         _boundaries: null,
-        _getBoundaries: function (opts) {
-            if(methods._boundaries) {return methods._boundaries; }
-            var mostN = opts.markers[0].latitude,
-                mostE = opts.markers[0].longitude,
-                mostW = opts.markers[0].longitude,
-                mostS = opts.markers[0].latitude,
-                i;
+        _getBoundaries: function (opts, init) {
+            // if(methods._boundaries) {return methods._boundaries; }
+            var markers = opts.markers, i;
 
-            for (i = 1; i < opts.markers.length; i += 1) {
-                if(mostN > opts.markers[i].latitude) {mostN = opts.markers[i].latitude; }
-                if(mostE < opts.markers[i].longitude) {mostE = opts.markers[i].longitude; }
-                if(mostW > opts.markers[i].longitude) {mostW = opts.markers[i].longitude; }
-                if(mostS < opts.markers[i].latitude) {mostS = opts.markers[i].latitude; }
+            if(markers) {
+                var mostN = markers[0].latitude,
+                    mostE = markers[0].longitude,
+                    mostW = markers[0].longitude,
+                    mostS = markers[0].latitude;
+
+                for (i = 1; i < markers.length; i += 1) {
+                    if(mostN > markers[i].latitude) {mostN = markers[i].latitude; }
+                    if(mostE < markers[i].longitude) {mostE = markers[i].longitude; }
+                    if(mostW > markers[i].longitude) {mostW = markers[i].longitude; }
+                    if(mostS < markers[i].latitude) {mostS = markers[i].latitude; }
+                }
+                methods._boundaries = {N: mostN, E: mostE, W: mostW, S: mostS};
+            } else {
+                methods._boundaries = {N: 0, E: 0, W: 0, S: 0};
             }
-
-            methods._boundaries = {N: mostN, E: mostE, W: mostW, S: mostS};
             return methods._boundaries;
         },
 
@@ -225,7 +229,7 @@
                 most; //hoisting
 
             if (opts.markers.length && (opts.latitude == "fit" || opts.longitude == "fit")) {
-                most = methods._getBoundaries(opts);
+                most = methods._getBoundaries(opts, true);
                 center = new $googlemaps.LatLng((most.N + most.S)/2, (most.E + most.W)/2);
                 return center;
             }
@@ -422,6 +426,7 @@
             gmarker = new $googlemaps.Marker(markeropts);
             gmarker.setShadow(gshadow);
             $data.markers.push(gmarker);
+
             if(marker.key) {$data.markerKeys[marker.key] = gmarker; }
 
             // Set HTML and check if info window should be opened
@@ -473,11 +478,10 @@
             });
         },
 
-        _autoZoom: function (opts){
-            var data = this.data('gmap'),
-                opts = data?data.opts:opts,
+        _autoZoom: function (options){
+            var data = $(this).data('gmap'),
+                opts = $.extend({}, data?data.opts:{}, options),
                 i, boundaries, resX, resY, baseScale = 39135.758482;
-
             if (opts.log) {console.log("autozooming map");}
 
             boundaries = methods._getBoundaries(opts);
@@ -508,10 +512,9 @@
                 if (opts.log) {console.log("adding " + markers.length +" markers");}
                 // Loop through marker array
                 for (var i = 0; i < markers.length; i+= 1) {
-                    methods.addMarker.apply($(this),[markers[i]]);
+                    methods.addMarker.apply(this,[markers[i]]);
                 }
             }
-            return this;
         },
 
         /**
@@ -584,7 +587,6 @@
                 var gpoint = new $googlemaps.LatLng(marker.latitude, marker.longitude);
                 methods._processMarker.apply(this, [marker, gicon, gshadow, gpoint]);
             }
-            return this;
         },
 
         /**
@@ -626,20 +628,28 @@
          * change zoom, works with 'fit' option as well
          * @param zoom
          */
-        setZoom: function (zoom) {
+        setZoom: function (zoom, opts) {
             var $map = this.data('gmap').gmap;
             if (zoom === "fit"){
-                zoom = methods._autoZoom.apply($(this), []);
+                zoom = methods._autoZoom.apply(this, [opts]);
             }
             $map.setZoom(parseInt(zoom));
         },
 
         changeSettings: function (options) {
-            var $map = this.data('gmap').gmap;
-            options.markers = this.data('gmap').markers;
-            if(options.zoom) methods.setZoom(options.zoom);
+            var data = this.data('gmap'),
+                markers = [], i;
+            for (i = 0; i < data.markers.length; i += 1) {
+                markers[i] = {
+                    latitude: data.markers[i].getPosition().lat(),
+                    longitude: data.markers[i].getPosition().lng()
+                }
+            }
+            options.markers = markers;
+            
+            if(options.zoom) methods.setZoom.apply(this,[options.zoom, options]);
             if(options.latitude || options.longitude) {
-                $map.panTo(methods._getMapCenter(options));
+                data.gmap.panTo(methods._getMapCenter.apply(this,[options]));
             }
 
             // add controls and maptype

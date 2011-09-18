@@ -417,4 +417,189 @@
         });
     });
 
+    module("new in 3.3.0");
+
+    test("addMarkers", function() {
+        map = createNewMap();
+        var markers = [
+                    {
+                        latitude: 50.083,
+                        longitude: 19.917
+                    }
+                ];
+        var markers2 = [
+                    {
+                        latitude: 50.083,
+                        longitude: 19.917
+                    },
+                    {
+                        latitude: 50.20917,
+                        longitude: 19.75435
+                    },
+                    {
+                        latitude: 50.502343,
+                        longitude: 19.91243
+                    }
+                ];
+        var m;
+        stop();
+        map.gMap({
+            markers: markers,
+            zoom: 8,
+            onComplete: function() {
+                m = map.data('gmap').markers;
+                equal(m.length, 1, 'correct number of markers');
+                map.gMap('removeAllMarkers');
+                window.setTimeout(function() {
+                    m = map.data('gmap').markers;
+                    equal(m.length, 0, 'correct number of markers');
+                    map.gMap('addMarkers', markers2);
+                    window.setTimeout(function() {
+                        m = map.data('gmap').markers;
+                        equal(m.length, 3, 'correct number of markers');
+                        start();
+                    },1000);
+                },1000);
+            }
+        });
+    });
+
+    test("changeSettings - move center", function() {
+        map = createNewMap();
+        stop();
+        map.gMap({
+            zoom: 8,
+            latitude: 50.083,
+            longitude: 19.917,
+            onComplete: function() {
+                  map.gMap('changeSettings', {
+                      latitude: 50.20917,
+                      longitude: 19.75435
+                  });
+                window.setTimeout(function() {
+                    var center = map.data('gmap').gmap.getCenter();
+                    ok(Math.abs(center.lat() - 50.20917) < 0.001, 'center latitude correct');
+                    ok(Math.abs(center.lng() - 19.75435) < 0.001, 'center longitude correct');
+                    start();
+                }, 1000);
+            }
+        });
+    });
+
+    test("changeSettings - change zoom", function() {
+        map = createNewMap();
+        stop();
+        map.gMap({
+            zoom: 8,
+            latitude: 50.083,
+            longitude: 19.917,
+            onComplete: function() {
+                  map.gMap('changeSettings', {
+                      zoom: 12
+                  });
+                window.setTimeout(function() {
+                    var zoom = map.data('gmap').gmap.getZoom();
+                    equal(zoom, 12);
+                    start();
+                },1000);
+            }
+        });
+    });
+
+    test("changeSettings - fit new center", function() {
+        map = createNewMap();
+        var markers = [
+                    {
+                        latitude: 50.083,
+                        longitude: 19.917
+                    }
+                ];
+        var markers2 = [
+                    {
+                        latitude: 50.083,
+                        longitude: 19.917
+                    },
+                    {
+                        latitude: 50.20917,
+                        longitude: 19.75435
+                    },
+                    {
+                        latitude: 50.502343,
+                        longitude: 19.91243
+                    }
+                ];
+        stop();
+        map.gMap({
+            markers: markers,
+            zoom: 9,
+            latitude: "fit",
+            longitude: "fit",
+            onComplete: function() {
+                map.gMap('removeAllMarkers');
+                window.setTimeout(function() {
+                    map.gMap('addMarkers', markers2);
+                    window.setTimeout(function() {
+                        map.gMap('changeSettings', {
+                          latitude: 'fit',
+                          longitude: 'fit'
+                        });
+                        window.setTimeout(function() {
+                            var center = map.data('gmap').gmap.getCenter();
+                            ok(Math.abs(center.lat() - (50.083 + 50.502343)/2) < 0.001, 'center latitude correct');
+                            ok(Math.abs(center.lng() - (19.917 + 19.75435)/2) < 0.001, 'center longitude correct');
+                            start();
+                        },1000);
+                    },1000);
+                },1000);
+            }
+        });
+    });
+
+    test("changeSettings - fit new zoom", function() {
+        map = createNewMap();
+        var markers = [
+                    {
+                        latitude: 50.083,
+                        longitude: 19.917
+                    }
+                ];
+        var markers2 = [
+                    {
+                        latitude: 50.083,
+                        longitude: 19.917
+                    },
+                    {
+                        latitude: 50.20917,
+                        longitude: 19.75435
+                    },
+                    {
+                        latitude: 50.502343,
+                        longitude: 19.91243
+                    }
+                ];
+        stop();
+        map.gMap({
+            markers: markers,
+            zoom: 10,
+            latitude: "fit",
+            longitude: "fit",
+            onComplete: function() {
+                map.gMap('removeAllMarkers');
+                window.setTimeout(function() {
+                    map.gMap('addMarkers', markers2);
+                    window.setTimeout(function() {
+                        map.gMap('changeSettings', {
+                          zoom: 'fit'
+                        });
+                        window.setTimeout(function() {
+                            var zoom = map.data('gmap').gmap.getZoom();
+                            equal(zoom, 9, 'zoom correct');
+                            start();
+                        },1000);
+                    },1000);
+                },1000);
+            }
+        });
+    });
+
 }());
