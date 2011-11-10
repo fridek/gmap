@@ -270,7 +270,8 @@
                     position: location,
                     icon: gicon,
                     title: marker.title,
-                    map: $gmap
+                    map: $gmap,
+                    draggable: ((marker.draggable === true) ? true : false)
                 });
                 gmarker.setShadow(gshadow);
 
@@ -299,6 +300,13 @@
                 if (marker.html && marker.popup) {
                     if (opts.log) {console.log('opening popup ' + marker.html);}
                     infoWindow.open($gmap, gmarker);
+                }
+                
+                if (marker.onDragEnd){
+                    $googlemaps.event.addListener(gmarker, 'dragend', function(event) {
+                        if (opts.log) {console.log('drag end');}
+                        marker.onDragEnd(event);
+                    });
                 }
 
             },
