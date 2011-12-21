@@ -3,20 +3,77 @@
  *
  * @url         http://www.smashinglabs.pl/gmap
  * @author      Sebastian Poreba <sebastian.poreba@gmail.com>
- * @version     3.2.0
- * @date        19.08.2011
+ * @version     3.3.0
+ * @date        21.12.2011
  */
-/*jslint white: true, undef: true, regexp: true, plusplus: true, bitwise: true, newcap: true, strict: true, devel: true, maxerr: 50, indent: 4 */
+/*jslint white: false, undef: true, regexp: true, plusplus: true, bitwise: true, newcap: true, strict: true, devel: true, maxerr: 50, indent: 4 */
 /*global window, jQuery, $, google, $googlemaps */
 (function ($) {
     "use strict";
+
+    /**
+     * Internals and experimental section
+     */
+    var Cluster = function () {
+        this.markers = [];
+        this.mainMarker = false;
+        this.icon = "http://www.google.com/mapfiles/marker.png";
+    };
+
+    /**
+     * For iterating over all clusters to find if any is close enough to be merged with marker
+     *
+     * @param marker
+     * @param currentSize - calculated as viewport percentage (opts.clusterSize)
+     * @return bool
+     */
+    Cluster.prototype.dist = function (marker) {
+        return Math.sqrt(Math.pow(this.markers[0].latitude - marker.latitude, 2) +
+            Math.pow(this.markers[0].longitude - marker.longitude, 2));
+    };
+
+    Cluster.prototype.setIcon = function (icon) {
+        this.icon = icon;
+    };
+
+    Cluster.prototype.addMarker = function (marker) {
+        this.markers[this.markers.length] = marker;
+    };
+
+    /**
+     * returns one marker if there is only one or
+     * returns special cloister marker if there are more
+     */
+    Cluster.prototype.getMarker = function () {
+        if (this.mainmarker) {return this.mainmarker; }
+        var gicon, title;
+        if (this.markers.length > 1) {
+            gicon = new $googlemaps.MarkerImage("http://thydzik.com/thydzikGoogleMap/markerlink.php?text=" + this.markers.length + "&color=EF9D3F");
+            title = "cluster of " + this.markers.length + " markers";
+        } else {
+            gicon = new $googlemaps.MarkerImage(this.icon);
+            title = this.markers[0].title;
+        }
+        this.mainmarker = new $googlemaps.Marker({
+            position: new $googlemaps.LatLng(this.markers[0].latitude, this.markers[0].longitude),
+            icon: gicon,
+            title: title,
+            map: null
+        });
+        return this.mainmarker;
+    };
 
     // global google maps objects
     var $googlemaps = google.maps,
         $geocoder = new $googlemaps.Geocoder(),
         $markersToLoad = 0,
-        methods = {}; // for JSLint
+        overQueryLimit = 0,
+        methods = {};
     methods = {
+        /**
+         * initialisation/internals
+         */
+            
         init: function (options) {
             var k,
             // Build main options before element iteration
@@ -36,7 +93,7 @@
                     i, $data;
 
                 if (opts.zoom == "fit") {
-                    opts.zoom = methods.autoZoom.apply($this, [opts]);
+                    opts.zoom = methods._autoZoom.apply($this, [opts]);
                 }
 
                 var  mapOptions = {
@@ -67,7 +124,8 @@
                     'gmap': $gmap,
                     'markers': [],
                     'markerKeys' : {},
-                    'infoWindow': null
+                    'infoWindow': null,
+                    'clusters': []
                 });
 
                 // Check for map controls
@@ -78,54 +136,108 @@
                     }
                 }
 
-                if (opts.markers.length !== 0) {
-                    // Loop through marker array
-                    methods.addMarkers.apply($this, [opts.markers]);
+                if (opts.clustering.enabled) {
+                    $data = $this.data('gmap');
+                    (function(markers) {$data.markers = markers;}(opts.markers));
+                    methods._renderCluster.apply($this, []);
+
+                    $googlemaps.event.addListener($gmap, 'bounds_changed', function () {
+                        methods._renderCluster.apply($this, []);
+                    });
+                } else {
+                    if (opts.markers.length !== 0) {
+                        methods.addMarkers.apply($this, [opts.markers]);
+                    }
                 }
 
                 methods._onComplete.apply($this, []);
             });
         },
 
+
+        _delayedMode: false,
+
+        /**
+         * Check every 100ms if all markers were loaded, then call onComplete
+         */
         _onComplete: function () {
             var $data = this.data('gmap'),
                 that = this;
             if ($markersToLoad !== 0) {
-                window.setTimeout(function () {methods._onComplete.apply(that, []); }, 1000);
+                window.setTimeout(function () {methods._onComplete.apply(that, []); }, 100);
                 return;
+            }
+            if(methods._delayedMode) {
+                var center = methods._getMapCenter.apply(this, [$data.opts, true]);
+                methods._setMapCenter.apply(this, [center]);
+                var zoom = methods._autoZoom.apply(this, [$data.opts, true]);
+                $data.gmap.setZoom(zoom);
             }
             $data.opts.onComplete();
         },
 
+        /**
+         * set map center when map is loaded (check every 100ms)
+         */
         _setMapCenter: function (center) {
             var $data = this.data('gmap');
             if ($data.opts.log) {console.log('delayed setMapCenter called'); }
-            if ($data.gmap !== undefined) {
+            if ($data.gmap !== undefined && $markersToLoad == 0) {
                 $data.gmap.setCenter(center);
             } else {
                 var that = this;
-                window.setTimeout(function () {methods._setMapCenter.apply(that, [center]); }, 500);
+                window.setTimeout(function () {methods._setMapCenter.apply(that, [center]); }, 100);
             }
         },
 
+        /**
+         * calculate boundaries, optimised and independent from Google Maps
+         */
         _boundaries: null,
-
         _getBoundaries: function (opts) {
-            if(methods._boundaries) {return methods._boundaries; }
-            var mostN = opts.markers[0].latitude,
-                mostE = opts.markers[0].longitude,
-                mostW = opts.markers[0].longitude,
-                mostS = opts.markers[0].latitude,
-                i;
+            // if(methods._boundaries) {return methods._boundaries; }
+            var markers = opts.markers, i;
+            var mostN = 1000,
+                mostE = -1000,
+                mostW = 1000,
+                mostS = -1000;
+            if(markers) {
+                for (i = 0; i < markers.length; i += 1) {
+                    if(!markers[i].latitude || !markers[i].longitude) continue;
 
-            for (i = 1; i < opts.markers.length; i += 1) {
-                if(mostN > opts.markers[i].latitude) {mostN = opts.markers[i].latitude; }
-                if(mostE < opts.markers[i].longitude) {mostE = opts.markers[i].longitude; }
-                if(mostW > opts.markers[i].longitude) {mostW = opts.markers[i].longitude; }
-                if(mostS < opts.markers[i].latitude) {mostS = opts.markers[i].latitude; }
+                    if(mostN > markers[i].latitude) {mostN = markers[i].latitude; }
+                    if(mostE < markers[i].longitude) {mostE = markers[i].longitude; }
+                    if(mostW > markers[i].longitude) {mostW = markers[i].longitude; }
+                    if(mostS < markers[i].latitude) {mostS = markers[i].latitude; }
+                    console.log(markers[i].latitude, markers[i].longitude, mostN, mostE, mostW, mostS);
+                }
+                methods._boundaries = {N: mostN, E: mostE, W: mostW, S: mostS};
             }
 
-            methods._boundaries = {N: mostN, E: mostE, W: mostW, S: mostS};
+            if(mostN == -1000) methods._boundaries = {N: 0, E: 0, W: 0, S: 0};
+
+            return methods._boundaries;
+        },
+
+        _getBoundariesFromMarkers: function () {
+
+            var markers = this.data('gmap').markers, i;
+            var mostN = 1000,
+                mostE = -1000,
+                mostW = 1000,
+                mostS = -1000;
+            if(markers) {
+                for (i = 0; i < markers.length; i += 1) {
+                    if(mostN > markers[i].getPosition().lat()) {mostN = markers[i].getPosition().lat(); }
+                    if(mostE < markers[i].getPosition().lng()) {mostE = markers[i].getPosition().lng(); }
+                    if(mostW > markers[i].getPosition().lng()) {mostW = markers[i].getPosition().lng(); }
+                    if(mostS < markers[i].getPosition().lat()) {mostS = markers[i].getPosition().lat(); }
+                }
+                methods._boundaries = {N: mostN, E: mostE, W: mostW, S: mostS};
+            }
+
+            if(mostN == -1000) methods._boundaries = {N: 0, E: 0, W: 0, S: 0};
+
             return methods._boundaries;
         },
 
@@ -140,7 +252,7 @@
          * Note: with geocoding returned value is (0,0) and callback sets map center. It's not very nice nor efficient.
          *       It is quite good idea to use only first option
          */
-        _getMapCenter: function (opts) {
+        _getMapCenter: function (opts, fromMarkers) {
             // Create new object to geocode addresses
 
             var center,
@@ -150,8 +262,10 @@
                 most; //hoisting
 
             if (opts.markers.length && (opts.latitude == "fit" || opts.longitude == "fit")) {
-                most = methods._getBoundaries(opts);
+                if(fromMarkers) most = methods._getBoundariesFromMarkers.apply(this);
+                else most = methods._getBoundaries(opts);
                 center = new $googlemaps.LatLng((most.N + most.S)/2, (most.E + most.W)/2);
+                console.log(fromMarkers, most, center);
                 return center;
             }
 
@@ -228,65 +342,83 @@
             return center;
         },
 
-        setZoom: function (zoom) {
-            var $map = this.data('gmap').gmap;
-            if (zoom === "fit"){
-                zoom = methods.autoZoom.apply($(this), []);
-            }
-            $map.setZoom(parseInt(zoom));
-        },
 
-        getRoute: function (options) {
-
+        /**
+         * clustering
+         */
+        _renderCluster: function () {
             var $data = this.data('gmap'),
-            $gmap = $data.gmap,
-            $directionsDisplay = new $googlemaps.DirectionsRenderer(),
-            $directionsService = new $googlemaps.DirectionsService(),
-            $travelModes = { 'BYCAR': $googlemaps.DirectionsTravelMode.DRIVING, 'BYBICYCLE': $googlemaps.DirectionsTravelMode.BICYCLING, 'BYFOOT': $googlemaps.DirectionsTravelMode.WALKING },
-            $travelUnits = { 'MILES': $googlemaps.DirectionsUnitSystem.IMPERIAL, 'KM': $googlemaps.DirectionsUnitSystem.METRIC },
-            displayObj = null,
-            travelMode = null,
-            travelUnit = null,
-            unitSystem = null;
+                markers = $data.markers,
+                clusters = $data.clusters,
+                opts = $data.opts,
+                i,
+                j,
+                viewport;
 
-            // look if there is an individual or otherwise a default object for this call to display route text informations
-            if(options.routeDisplay !== undefined){
-                displayObj = (options.routeDisplay instanceof jQuery) ? options.routeDisplay[0] : ((typeof options.routeDisplay == "string") ? $(options.routeDisplay)[0] : null);
-            } else if($data.opts.routeDisplay !== null){
-                displayObj = ($data.opts.routeDisplay instanceof jQuery) ? $data.opts.routeDisplay[0] : ((typeof $data.opts.routeDisplay == "string") ? $($data.opts.routeDisplay)[0] : null);
+            for (i = 0; i < clusters.length; i += 1) {
+                clusters[i].getMarker().setMap(null);
+            }
+            clusters.length = 0;
+
+            viewport = $data.gmap.getBounds();
+
+            if (!viewport) {
+                var that = this;
+                window.setTimeout(function () {methods._renderCluster.apply(that); }, 1000);
+                return;
             }
 
-            // set route renderer to map
-            $directionsDisplay.setMap($gmap);
-            if(displayObj !== null){
-                $directionsDisplay.setPanel(displayObj);
-            }
+            var ne = viewport.getNorthEast(),
+                sw = viewport.getSouthWest(),
+                width = ne.lat() - sw.lat(),
+                // height = ne.lng() - sw.lng(), // unused
+                clusterable = [],
+                best,
+                bestDist,
+                maxSize = width * opts.clustering.clusterSize / 100,
+                dist,
+                newCluster;
 
-            // get travel mode and unit
-            travelMode = ($travelModes[$data.opts.travelMode] !== undefined) ? $travelModes[$data.opts.travelMode] : $travelModes['BYCAR'];
-            travelUnit = ($travelUnits[$data.opts.travelUnit] !== undefined) ? $travelUnits[$data.opts.travelUnit] : $travelUnits['KM'];
-
-            // build request
-            var request = {
-                origin: options.from,
-                destination: options.to,
-                travelMode: travelMode,
-                unitSystem: travelUnit
-            };
-
-            // send request
-            $directionsService.route(request, function(result, status) {
-                // show the rout or otherwise show an error message in a defined container for route text information
-                if (status == $googlemaps.DirectionsStatus.OK) {
-                    $directionsDisplay.setDirections(result);
-                } else if(displayObj !== null){
-                    $(displayObj).html($data.opts.routeErrors[status]);
+            for (i = 0; i < markers.length; i += 1) {
+                if (markers[i].latitude < ne.lat() &&
+                    markers[i].latitude > sw.lat() &&
+                    markers[i].longitude < ne.lng() &&
+                    markers[i].longitude > sw.lng()) {
+                    clusterable[clusterable.length] = markers[i];
                 }
-            });
-            return this;
+            }
+
+            if (opts.log) {console.log("number of markers " + clusterable.length + "/" + markers.length); }
+            if (opts.log) {console.log('cluster radius: ' + maxSize); }
+
+            for (i = 0; i < clusterable.length; i += 1) {
+                bestDist = 10000;
+                best = -1;
+                for (j = 0; j < clusters.length; j += 1) {
+                    dist = clusters[j].dist(clusterable[i]);
+                    if (dist < maxSize) {
+                        bestDist = dist;
+                        best = j;
+                        if (opts.clustering.fastClustering) {break; }
+                    }
+                }
+                if (best === -1) {
+                    newCluster = new Cluster();
+                    newCluster.addMarker(clusterable[i]);
+                    clusters[clusters.length] = newCluster;
+                } else {
+                    clusters[best].addMarker(clusterable[i]);
+                }
+            }
+
+            if (opts.log) {console.log("Total clusters in viewport: " + clusters.length); }
+
+            for (j = 0; j < clusters.length; j += 1) {
+                clusters[j].getMarker().setMap($data.gmap);
+            }
         },
 
-        processMarker: function (marker, gicon, gshadow, location) {
+        _processMarker: function (marker, gicon, gshadow, location) {
             var $data = this.data('gmap'),
                 $gmap = $data.gmap,
                 opts = $data.opts,
@@ -321,12 +453,16 @@
                     position: location,
                     icon: gicon,
                     title: marker.title,
-                    map: $gmap
+                    map: null,
+                    draggable: ((marker.draggable === true) ? true : false)
                 };
+
+            if (!opts.clustering.enabled) {markeropts.map = $gmap; }
 
             gmarker = new $googlemaps.Marker(markeropts);
             gmarker.setShadow(gshadow);
             $data.markers.push(gmarker);
+
             if(marker.key) {$data.markerKeys[marker.key] = gmarker; }
 
             // Set HTML and check if info window should be opened
@@ -355,30 +491,45 @@
                 $data.infoWindow = infoWindow;
             }
 
+            if (marker.onDragEnd){
+                $googlemaps.event.addListener(gmarker, 'dragend', function(event) {
+                    if (opts.log) {console.log('drag end');}
+                    marker.onDragEnd(event);
+                });
+            }
+
         },
 
         _geocodeMarker: function (marker, gicon, gshadow) {
-            $markersToLoad += 1;
             var that = this;
-
             $geocoder.geocode({'address': marker.address}, function (results, status) {
-                $markersToLoad -= 1;
                 if (status === $googlemaps.GeocoderStatus.OK) {
+                    $markersToLoad -= 1;
                     if (that.data('gmap').opts.log) {console.log("Geocode was successful with point: ", results[0].geometry.location); }
-                    methods.processMarker.apply(that, [marker, gicon, gshadow, results[0].geometry.location]);
+                    methods._processMarker.apply(that, [marker, gicon, gshadow, results[0].geometry.location]);
                 } else {
+                    if(status === $googlemaps.GeocoderStatus.OVER_QUERY_LIMIT) {
+                        if ((!that.data('gmap').opts.noAlerts) && (overQueryLimit === 0)) {alert('Error: too many geocoded addresses! Switching to 1 marker/s mode.'); }
+
+                        overQueryLimit+=1000;
+                        window.setTimeout(function() {
+                            methods._geocodeMarker.apply(that, [marker, gicon, gshadow]);
+                        }, overQueryLimit);
+                    }
                     if (that.data('gmap').opts.log) {console.log("Geocode was not successful for the following reason: " + status); }
                 }
             });
         },
 
-        autoZoom: function (opts){
-            var data = this.data('gmap'),
+        _autoZoom: function (options, fromMarkers){
+            var data = $(this).data('gmap'),
+                opts = $.extend({}, data?data.opts:{}, options),
                 i, boundaries, resX, resY, baseScale = 39135.758482;
-            opts = data?data.opts:opts
             if (opts.log) {console.log("autozooming map");}
 
-            boundaries = methods._getBoundaries(opts);
+            if(fromMarkers) boundaries = methods._getBoundariesFromMarkers.apply(this);
+            else boundaries = methods._getBoundaries(opts);
+            
             resX = (boundaries.E - boundaries.W) * 111000 / this.width();
             resY = (boundaries.S - boundaries.N) * 111000 / this.height();
 
@@ -391,6 +542,14 @@
             return i - 2;
         },
 
+        /**
+         * public methods section
+         */
+
+        /**
+         * add array of markers
+         * @param markers
+         */
         addMarkers: function (markers){
             var opts = this.data('gmap').opts;
 
@@ -398,12 +557,15 @@
                 if (opts.log) {console.log("adding " + markers.length +" markers");}
                 // Loop through marker array
                 for (var i = 0; i < markers.length; i+= 1) {
-                    methods.addMarker.apply($(this),[markers[i]]);
+                    methods.addMarker.apply(this,[markers[i]]);
                 }
             }
-            return this;
         },
 
+        /**
+         * add single marker
+         * @param marker
+         */
         addMarker: function (marker) {
             var opts = this.data('gmap').opts;
 
@@ -420,7 +582,7 @@
             _gshadow = {
                 image: opts.icon.shadow,
                 iconSize: new $googlemaps.Size(opts.icon.shadowsize[0], opts.icon.shadowsize[1]),
-                anchor: _gicon.iconAnchor
+                anchor: new $googlemaps.Point(opts.icon.shadowanchor[0], opts.icon.shadowanchor[1])
             };
 
             // not very nice, but useful
@@ -436,6 +598,8 @@
 
                 if (marker.icon.shadow) { _gshadow.image = marker.icon.shadow; }
                 if (marker.icon.shadowsize) { _gshadow.iconSize = new $googlemaps.Size(marker.icon.shadowsize[0], marker.icon.shadowsize[1]); }
+
+                if (marker.icon.shadowanchor) { _gshadow.anchor = new $googlemaps.Point(marker.icon.shadowanchor[0], marker.icon.shadowanchor[1]); }
             }
 
             var gicon = new $googlemaps.MarkerImage(_gicon.image, _gicon.iconSize, null, _gicon.iconAnchor);
@@ -454,6 +618,8 @@
 
                 if (opts.log) {console.log('geocoding marker: ' + marker.address); }
                 // Get the point for given address
+                $markersToLoad += 1;
+                methods._delayedMode = true;
                 methods._geocodeMarker.apply(this, [marker, gicon, gshadow]);
             } else {
                 // Check for reference to the marker's latitude/longitude
@@ -467,11 +633,13 @@
 
                // Create marker
                 var gpoint = new $googlemaps.LatLng(marker.latitude, marker.longitude);
-                methods.processMarker.apply(this, [marker, gicon, gshadow, gpoint]);
+                methods._processMarker.apply(this, [marker, gicon, gshadow, gpoint]);
             }
-            return this;
         },
 
+        /**
+         * 
+         */
         removeAllMarkers: function () {
             var markers = this.data('gmap').markers, i;
 
@@ -482,8 +650,121 @@
             markers.length = 0;
         },
 
+        /**
+         * get marker by key, if set previously
+         * @param key
+         */
         getMarker: function (key) {
             return this.data('gmap').markerKeys[key];
+        },
+
+        /**
+         * should be called if DOM element was resized
+         * @param nasty
+         */
+        fixAfterResize: function (nasty) {
+            var data = this.data('gmap');
+            $googlemaps.event.trigger(data.gmap, 'resize');
+
+            if(nasty) {
+                data.gmap.panTo(new google.maps.LatLng(0,0));
+            }
+            data.gmap.panTo(this.gMap('_getMapCenter', data.opts));
+        },
+
+        /**
+         * change zoom, works with 'fit' option as well
+         * @param zoom
+         */
+        setZoom: function (zoom, opts, fromMarkers) {
+            var $map = this.data('gmap').gmap;
+            if (zoom === "fit"){
+                zoom = methods._autoZoom.apply(this, [opts, fromMarkers]);
+            }
+            $map.setZoom(parseInt(zoom));
+        },
+
+        changeSettings: function (options) {
+            var data = this.data('gmap'),
+                markers = [], i;
+            for (i = 0; i < data.markers.length; i += 1) {
+                markers[i] = {
+                    latitude: data.markers[i].getPosition().lat(),
+                    longitude: data.markers[i].getPosition().lng()
+                }
+            }
+            options.markers = markers;
+            
+            if(options.zoom) methods.setZoom.apply(this,[options.zoom, options]);
+            if(options.latitude || options.longitude) {
+                data.gmap.panTo(methods._getMapCenter.apply(this,[options]));
+            }
+
+            // add controls and maptype
+        },
+
+        mapclick: function(callback) {
+            google.maps.event.addListener(this.data('gmap').gmap, 'click', function(event) {
+                callback(event.latLng);
+            });
+        },
+
+        geocode: function(address, callback) {
+            $geocoder.geocode({'address': address}, function (results, status) {
+                if (status === $googlemaps.GeocoderStatus.OK) {
+                    callback(results[0].geometry.location);
+                }
+            });
+        },
+
+        getRoute: function (options) {
+
+            var $data = this.data('gmap'),
+            $gmap = $data.gmap,
+            $directionsDisplay = new $googlemaps.DirectionsRenderer(),
+            $directionsService = new $googlemaps.DirectionsService(),
+            $travelModes = { 'BYCAR': $googlemaps.DirectionsTravelMode.DRIVING, 'BYBICYCLE': $googlemaps.DirectionsTravelMode.BICYCLING, 'BYFOOT': $googlemaps.DirectionsTravelMode.WALKING },
+            $travelUnits = { 'MILES': $googlemaps.DirectionsUnitSystem.IMPERIAL, 'KM': $googlemaps.DirectionsUnitSystem.METRIC },
+            displayObj = null,
+            travelMode = null,
+            travelUnit = null,
+            unitSystem = null;
+
+            // look if there is an individual or otherwise a default object for this call to display route text informations
+            if(options.routeDisplay !== undefined){
+                displayObj = (options.routeDisplay instanceof jQuery) ? options.routeDisplay[0] : ((typeof options.routeDisplay == "string") ? $(options.routeDisplay)[0] : null);
+            } else if($data.opts.routeFinder.routeDisplay !== null){
+                displayObj = ($data.opts.routeFinder.routeDisplay instanceof jQuery) ? $data.opts.routeFinder.routeDisplay[0] : ((typeof $data.opts.routeFinder.routeDisplay == "string") ? $($data.opts.routeFinder.routeDisplay)[0] : null);
+            }
+
+            // set route renderer to map
+            $directionsDisplay.setMap($gmap);
+            if(displayObj !== null){
+                $directionsDisplay.setPanel(displayObj);
+            }
+
+            // get travel mode and unit
+            travelMode = ($travelModes[$data.opts.routeFinder.travelMode] !== undefined) ? $travelModes[$data.opts.routeFinder.travelMode] : $travelModes['BYCAR'];
+            travelUnit = ($travelUnits[$data.opts.routeFinder.travelUnit] !== undefined) ? $travelUnits[$data.opts.routeFinder.travelUnit] : $travelUnits['KM'];
+
+            // build request
+            var request = {
+                origin: options.from,
+                destination: options.to,
+                travelMode: travelMode,
+                unitSystem: travelUnit
+            };
+
+            // send request
+            $directionsService.route(request, function(result, status) {
+                // show the rout or otherwise show an error message in a defined container for route text information
+                if (status == $googlemaps.DirectionsStatus.OK) {
+                    $directionsDisplay.setDirections(result);
+                } else if(displayObj !== null){
+                    $(displayObj).html($data.opts.routeFinder.routeErrors[status]);
+                }
+            });
+            return this;
         }
     };
 
@@ -530,22 +811,31 @@
             iconanchor:          [9, 34],
             infowindowanchor:    [9, 2],
             shadow:              "http://www.google.com/mapfiles/shadow50.png",
-            shadowsize:          [37, 34]
+            shadowsize:          [37, 34],
+            shadowanchor:        [9, 34]
         },
 
         onComplete:              function () {},
 
-        travelMode:              'BYCAR',
-        travelUnit:              'KM',
-        routeDisplay:            null,
-		routeErrors:			 {
-                        		    'INVALID_REQUEST': 'The provided request is invalid.',
-                                    'NOT_FOUND': 'One or more of the given addresses could not be found.',
-                                    'OVER_QUERY_LIMIT': 'A temporary error occured. Please try again in a few minutes.',
-                                    'REQUEST_DENIED': 'An error occured. Please contact us.',
-                                    'UNKNOWN_ERROR': 'An unknown error occured. Please try again.',
-                                    'ZERO_RESULTS': 'No route could be found within the given addresses.'
-								 }
+        routeFinder: {
+            travelMode:              'BYCAR',
+            travelUnit:              'KM',
+            routeDisplay:            null,
+            routeErrors:			 {
+                                        'INVALID_REQUEST': 'The provided request is invalid.',
+                                        'NOT_FOUND': 'One or more of the given addresses could not be found.',
+                                        'OVER_QUERY_LIMIT': 'A temporary error occured. Please try again in a few minutes.',
+                                        'REQUEST_DENIED': 'An error occured. Please contact us.',
+                                        'UNKNOWN_ERROR': 'An unknown error occured. Please try again.',
+                                        'ZERO_RESULTS': 'No route could be found within the given addresses.'
+                                     }
+        },
 
+        clustering: {
+            enabled: false,
+            fastClustering: false,
+            clusterCount: 10,
+            clusterSize: 40 //radius as % of viewport width
+        }
     };
 }(jQuery));
