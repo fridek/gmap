@@ -334,6 +334,46 @@
         });
     });
 
+    test("address markers in viewport", function() {
+        map = createNewMap();
+        var markers = [
+                    {
+                        address: "Kraków, ul. Kazimierza Wielkiego"
+                    },
+                    {
+                        address: "Kraków, ul. Borkowska"
+                    },
+                    {
+                        address: "Kraków, os. Kolorowe"
+                    }
+                ];
+        stop();
+        map.gMap({
+            markers: markers,
+//            log: true,
+            zoom: "fit",
+            latitude: "fit",
+            longitude: "fit",
+            onComplete: function() {
+                window.setTimeout(function() {
+                    var viewport = map.data('gmap').gmap.getBounds(),
+                        ne = viewport.getNorthEast(),
+                        sw = viewport.getSouthWest();
+
+                    var realMarkers = map.data('gmap').markers;
+                    for(var i = 0;i<realMarkers.length;i++){
+
+                        ok(realMarkers[i].getPosition().lat() < ne.lat() &&
+                            realMarkers[i].getPosition().lat() > sw.lat() &&
+                            realMarkers[i].getPosition().lng() < ne.lng() &&
+                            realMarkers[i].getPosition().lng() > sw.lng(), 'marker ' + i + ' in viewport');
+                    }
+                    start();
+                },1000);
+            }
+        });
+    });
+
     test("fit after load", function() {
         map = createNewMap();
         stop();
@@ -386,6 +426,7 @@
         map.gMap({
             markers: markers,
             zoom: 13,
+            log: true,
             latitude: "fit",
             longitude: "fit",
             onComplete: function() {
@@ -399,19 +440,19 @@
                             markers[i].longitude < ne.lng() &&
                             markers[i].longitude > sw.lng()), 'marker ' + i + ' not in viewport');
                     }
-
                     map.gMap('setZoom',"fit");
-
-                    viewport = map.data('gmap').gmap.getBounds(),
-                    ne = viewport.getNorthEast(),
-                    sw = viewport.getSouthWest();
-                    for(i = 0;i<markers.length;i++){
-                        ok(markers[i].latitude < ne.lat() &&
-                            markers[i].latitude > sw.lat() &&
-                            markers[i].longitude < ne.lng() &&
-                            markers[i].longitude > sw.lng(), 'marker ' + i + ' in viewport');
-                    }
-                    start();
+                    window.setTimeout(function() {
+                        viewport = map.data('gmap').gmap.getBounds(),
+                        ne = viewport.getNorthEast(),
+                        sw = viewport.getSouthWest();
+                        for(i = 0;i<markers.length;i++){
+                            ok(markers[i].latitude < ne.lat() &&
+                                markers[i].latitude > sw.lat() &&
+                                markers[i].longitude < ne.lng() &&
+                                markers[i].longitude > sw.lng(), 'marker ' + i + ' in viewport');
+                        }
+                        start();
+                    },1000);
                 },1000);
             }
         });

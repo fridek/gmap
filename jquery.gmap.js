@@ -154,30 +154,39 @@
             });
         },
 
+
+        _delayedMode: false,
+
         /**
-         * Check every 1000ms if all markers were loaded, then call onComplete
+         * Check every 100ms if all markers were loaded, then call onComplete
          */
         _onComplete: function () {
             var $data = this.data('gmap'),
                 that = this;
             if ($markersToLoad !== 0) {
-                window.setTimeout(function () {methods._onComplete.apply(that, []); }, 1000);
+                window.setTimeout(function () {methods._onComplete.apply(that, []); }, 100);
                 return;
+            }
+            if(methods._delayedMode) {
+                var center = methods._getMapCenter.apply(this, [$data.opts, true]);
+                methods._setMapCenter.apply(this, [center]);
+                var zoom = methods._autoZoom.apply(this, [$data.opts, true]);
+                $data.gmap.setZoom(zoom);
             }
             $data.opts.onComplete();
         },
 
         /**
-         * set map center when map is loaded (check every 500ms)
+         * set map center when map is loaded (check every 100ms)
          */
         _setMapCenter: function (center) {
             var $data = this.data('gmap');
             if ($data.opts.log) {console.log('delayed setMapCenter called'); }
-            if ($data.gmap !== undefined) {
+            if ($data.gmap !== undefined && $markersToLoad == 0) {
                 $data.gmap.setCenter(center);
             } else {
                 var that = this;
-                window.setTimeout(function () {methods._setMapCenter.apply(that, [center]); }, 500);
+                window.setTimeout(function () {methods._setMapCenter.apply(that, [center]); }, 100);
             }
         },
 
@@ -185,26 +194,50 @@
          * calculate boundaries, optimised and independent from Google Maps
          */
         _boundaries: null,
-        _getBoundaries: function (opts, init) {
+        _getBoundaries: function (opts) {
             // if(methods._boundaries) {return methods._boundaries; }
             var markers = opts.markers, i;
-
+            var mostN = 1000,
+                mostE = -1000,
+                mostW = 1000,
+                mostS = -1000;
             if(markers) {
-                var mostN = markers[0].latitude,
-                    mostE = markers[0].longitude,
-                    mostW = markers[0].longitude,
-                    mostS = markers[0].latitude;
+                for (i = 0; i < markers.length; i += 1) {
+                    if(!markers[i].latitude || !markers[i].longitude) continue;
 
-                for (i = 1; i < markers.length; i += 1) {
                     if(mostN > markers[i].latitude) {mostN = markers[i].latitude; }
                     if(mostE < markers[i].longitude) {mostE = markers[i].longitude; }
                     if(mostW > markers[i].longitude) {mostW = markers[i].longitude; }
                     if(mostS < markers[i].latitude) {mostS = markers[i].latitude; }
+                    console.log(markers[i].latitude, markers[i].longitude, mostN, mostE, mostW, mostS);
                 }
                 methods._boundaries = {N: mostN, E: mostE, W: mostW, S: mostS};
-            } else {
-                methods._boundaries = {N: 0, E: 0, W: 0, S: 0};
             }
+
+            if(mostN == -1000) methods._boundaries = {N: 0, E: 0, W: 0, S: 0};
+
+            return methods._boundaries;
+        },
+
+        _getBoundariesFromMarkers: function () {
+
+            var markers = this.data('gmap').markers, i;
+            var mostN = 1000,
+                mostE = -1000,
+                mostW = 1000,
+                mostS = -1000;
+            if(markers) {
+                for (i = 0; i < markers.length; i += 1) {
+                    if(mostN > markers[i].getPosition().lat()) {mostN = markers[i].getPosition().lat(); }
+                    if(mostE < markers[i].getPosition().lng()) {mostE = markers[i].getPosition().lng(); }
+                    if(mostW > markers[i].getPosition().lng()) {mostW = markers[i].getPosition().lng(); }
+                    if(mostS < markers[i].getPosition().lat()) {mostS = markers[i].getPosition().lat(); }
+                }
+                methods._boundaries = {N: mostN, E: mostE, W: mostW, S: mostS};
+            }
+
+            if(mostN == -1000) methods._boundaries = {N: 0, E: 0, W: 0, S: 0};
+
             return methods._boundaries;
         },
 
@@ -219,7 +252,7 @@
          * Note: with geocoding returned value is (0,0) and callback sets map center. It's not very nice nor efficient.
          *       It is quite good idea to use only first option
          */
-        _getMapCenter: function (opts) {
+        _getMapCenter: function (opts, fromMarkers) {
             // Create new object to geocode addresses
 
             var center,
@@ -229,8 +262,10 @@
                 most; //hoisting
 
             if (opts.markers.length && (opts.latitude == "fit" || opts.longitude == "fit")) {
-                most = methods._getBoundaries(opts, true);
+                if(fromMarkers) most = methods._getBoundariesFromMarkers.apply(this);
+                else most = methods._getBoundaries(opts);
                 center = new $googlemaps.LatLng((most.N + most.S)/2, (most.E + most.W)/2);
+                console.log(fromMarkers, most, center);
                 return center;
             }
 
@@ -478,13 +513,15 @@
             });
         },
 
-        _autoZoom: function (options){
+        _autoZoom: function (options, fromMarkers){
             var data = $(this).data('gmap'),
                 opts = $.extend({}, data?data.opts:{}, options),
                 i, boundaries, resX, resY, baseScale = 39135.758482;
             if (opts.log) {console.log("autozooming map");}
 
-            boundaries = methods._getBoundaries(opts);
+            if(fromMarkers) boundaries = methods._getBoundariesFromMarkers.apply(this);
+            else boundaries = methods._getBoundaries(opts);
+            
             resX = (boundaries.E - boundaries.W) * 111000 / this.width();
             resY = (boundaries.S - boundaries.N) * 111000 / this.height();
 
@@ -572,6 +609,7 @@
                 if (opts.log) {console.log('geocoding marker: ' + marker.address); }
                 // Get the point for given address
                 $markersToLoad += 1;
+                methods._delayedMode = true;
                 methods._geocodeMarker.apply(this, [marker, gicon, gshadow]);
             } else {
                 // Check for reference to the marker's latitude/longitude
@@ -628,10 +666,10 @@
          * change zoom, works with 'fit' option as well
          * @param zoom
          */
-        setZoom: function (zoom, opts) {
+        setZoom: function (zoom, opts, fromMarkers) {
             var $map = this.data('gmap').gmap;
             if (zoom === "fit"){
-                zoom = methods._autoZoom.apply(this, [opts]);
+                zoom = methods._autoZoom.apply(this, [opts, fromMarkers]);
             }
             $map.setZoom(parseInt(zoom));
         },
