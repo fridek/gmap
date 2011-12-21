@@ -3,8 +3,8 @@
  *
  * @url         http://www.smashinglabs.pl/gmap
  * @author      Sebastian Poreba <sebastian.poreba@gmail.com>
- * @version     3.3.0 beta
- * @date        18.09.2011
+ * @version     3.3.0
+ * @date        21.12.2011
  */
 /*jslint white: false, undef: true, regexp: true, plusplus: true, bitwise: true, newcap: true, strict: true, devel: true, maxerr: 50, indent: 4 */
 /*global window, jQuery, $, google, $googlemaps */
@@ -68,7 +68,7 @@
         $geocoder = new $googlemaps.Geocoder(),
         $markersToLoad = 0,
         overQueryLimit = 0,
-        methods = {}; // for JSLint
+        methods = {};
     methods = {
         /**
          * initialisation/internals
@@ -453,7 +453,8 @@
                     position: location,
                     icon: gicon,
                     title: marker.title,
-                    map: null
+                    map: null,
+                    draggable: ((marker.draggable === true) ? true : false)
                 };
 
             if (!opts.clustering.enabled) {markeropts.map = $gmap; }
@@ -488,6 +489,13 @@
                 if (opts.log) {console.log('opening popup ' + marker.html); }
                 infoWindow.open($gmap, gmarker);
                 $data.infoWindow = infoWindow;
+            }
+
+            if (marker.onDragEnd){
+                $googlemaps.event.addListener(gmarker, 'dragend', function(event) {
+                    if (opts.log) {console.log('drag end');}
+                    marker.onDragEnd(event);
+                });
             }
 
         },
@@ -574,7 +582,7 @@
             _gshadow = {
                 image: opts.icon.shadow,
                 iconSize: new $googlemaps.Size(opts.icon.shadowsize[0], opts.icon.shadowsize[1]),
-                anchor: _gicon.iconAnchor
+                anchor: new $googlemaps.Point(opts.icon.shadowanchor[0], opts.icon.shadowanchor[1])
             };
 
             // not very nice, but useful
@@ -590,6 +598,8 @@
 
                 if (marker.icon.shadow) { _gshadow.image = marker.icon.shadow; }
                 if (marker.icon.shadowsize) { _gshadow.iconSize = new $googlemaps.Size(marker.icon.shadowsize[0], marker.icon.shadowsize[1]); }
+
+                if (marker.icon.shadowanchor) { _gshadow.anchor = new $googlemaps.Point(marker.icon.shadowanchor[0], marker.icon.shadowanchor[1]); }
             }
 
             var gicon = new $googlemaps.MarkerImage(_gicon.image, _gicon.iconSize, null, _gicon.iconAnchor);
@@ -801,7 +811,8 @@
             iconanchor:          [9, 34],
             infowindowanchor:    [9, 2],
             shadow:              "http://www.google.com/mapfiles/shadow50.png",
-            shadowsize:          [37, 34]
+            shadowsize:          [37, 34],
+            shadowanchor:        [9, 34]
         },
 
         onComplete:              function () {},

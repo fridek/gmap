@@ -442,7 +442,7 @@
                     }
                     map.gMap('setZoom',"fit");
                     window.setTimeout(function() {
-                        viewport = map.data('gmap').gmap.getBounds(),
+                        var viewport = map.data('gmap').gmap.getBounds(),
                         ne = viewport.getNorthEast(),
                         sw = viewport.getSouthWest();
                         for(i = 0;i<markers.length;i++){
