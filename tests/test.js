@@ -265,6 +265,30 @@
 
     module("Auto center/zoom");
 
+    test("correct zoom for geocoding", function() {
+        map = createNewMap();
+        stop();
+        map.gMap({
+            markers: [
+                {
+                    address: "Kraków, ul. Grodzka",
+                    html: 'marker 1'
+                }, {
+                    address: "Kraków, ul. Basztowa",
+                    html: 'marker 2'
+                }
+            ],
+            zoom: 12,
+            onComplete: function() {
+                data = map.data('gmap');
+
+                equal(data.gmap.getZoom(), 12, 'zoom correct');
+
+                start();
+            }
+        });
+    });
+	
     test("all fit", function() {
         map = createNewMap();
         stop();

@@ -3,8 +3,8 @@
  *
  * @url         http://www.smashinglabs.pl/gmap
  * @author      Sebastian Poreba <sebastian.poreba@gmail.com>
- * @version     3.3.0
- * @date        21.12.2011
+ * @version     3.3.1
+ * @date        25.02.2011
  */
 /*jslint white: false, undef: true, regexp: true, plusplus: true, bitwise: true, newcap: true, strict: true, devel: true, maxerr: 50, indent: 4 */
 /*global window, jQuery, $, google, $googlemaps */
@@ -93,6 +93,7 @@
                     i, $data;
 
                 if (opts.zoom == "fit") {
+					opts.zoomFit = true;
                     opts.zoom = methods._autoZoom.apply($this, [opts]);
                 }
 
@@ -170,8 +171,10 @@
             if(methods._delayedMode) {
                 var center = methods._getMapCenter.apply(this, [$data.opts, true]);
                 methods._setMapCenter.apply(this, [center]);
-                var zoom = methods._autoZoom.apply(this, [$data.opts, true]);
-                $data.gmap.setZoom(zoom);
+				if($data.opts.zoomFit) {
+					var zoom = methods._autoZoom.apply(this, [$data.opts, true]);
+					$data.gmap.setZoom(zoom);
+				}
             }
             $data.opts.onComplete();
         },
