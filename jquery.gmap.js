@@ -3,8 +3,8 @@
  *
  * @url         http://www.smashinglabs.pl/gmap
  * @author      Sebastian Poreba <sebastian.poreba@gmail.com>
- * @version     3.3.1
- * @date        25.02.2011
+ * @version     3.3.2
+ * @date        02.03.2011
  */
 /*jslint white: false, undef: true, regexp: true, plusplus: true, bitwise: true, newcap: true, strict: true, devel: true, maxerr: 50, indent: 4 */
 /*global window, jQuery, $, google, $googlemaps */
@@ -93,7 +93,7 @@
                     i, $data;
 
                 if (opts.zoom == "fit") {
-					opts.zoomFit = true;
+					          opts.zoomFit = true;
                     opts.zoom = methods._autoZoom.apply($this, [opts]);
                 }
 
@@ -101,17 +101,31 @@
                         zoom: opts.zoom,
                         center: center,
                         mapTypeControl: opts.mapTypeControl,
+                        mapTypeControlOptions: {},
                         zoomControl: opts.zoomControl,
+                        zoomControlOptions: {},
                         panControl : opts.panControl,
+                        panControlOptions: {},
                         scaleControl : opts.scaleControl,
+                        scaleControlOptions: {},
                         streetViewControl: opts.streetViewControl,
+                        streetViewControlOptions: {},
                         mapTypeId: opts.maptype,
                         scrollwheel: opts.scrollwheel,
                         maxZoom: opts.maxZoom,
                         minZoom: opts.minZoom
-                    },
-                    // Create map and set initial options
-                    $gmap = new $googlemaps.Map(this, mapOptions);
+                    };
+                if(opts.controlsPositions.mapType) {mapOptions.mapTypeControlOptions.position = opts.controlsPositions.mapType};
+                if(opts.controlsPositions.zoom) {mapOptions.zoomControlOptions.position = opts.controlsPositions.zoom};
+                if(opts.controlsPositions.pan) {mapOptions.panControlOptions.position = opts.controlsPositions.pan};
+                if(opts.controlsPositions.scale) {mapOptions.scaleControlOptions.position = opts.controlsPositions.scale};
+                if(opts.controlsPositions.streetView) {mapOptions.streetViewControlOptions.position = opts.controlsPositions.streetView};
+
+                mapOptions.mapTypeControlOptions.style = opts.controlsStyle.mapType;
+                mapOptions.zoomControlOptions.style = opts.controlsStyle.zoom;
+				
+                // Create map and set initial options
+                var $gmap = new $googlemaps.Map(this, mapOptions);
 
                 if (opts.log) {console.log('map center is:'); }
                 if (opts.log) {console.log(center); }
@@ -804,6 +818,18 @@
         scaleControl:            false,
         streetViewControl:       true,
 
+        controlsPositions: {
+            mapType: 			 null,
+            zoom: 				 null,
+            pan: 				 null,
+            scale: 				 null,
+            streetView: 		 null
+        },
+        controlsStyle: {
+            mapType: 			 google.maps.MapTypeControlStyle.DEFAULT,
+            zoom:				 google.maps.ZoomControlStyle.DEFAULT
+        },
+		
         singleInfoWindow:        true,
 
         html_prepend:            '<div class="gmap_marker">',
