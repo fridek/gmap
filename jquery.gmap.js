@@ -726,10 +726,12 @@
             });
         },
 
-        geocode: function(address, callback) {
+        geocode: function(address, callback, errorCallback) {
             $geocoder.geocode({'address': address}, function (results, status) {
                 if (status === $googlemaps.GeocoderStatus.OK) {
                     callback(results[0].geometry.location);
+                } else if(errorCallback) {
+                    errorCallback(results, status);
                 }
             });
         },
