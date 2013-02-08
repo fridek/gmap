@@ -126,6 +126,8 @@
         mapOptions.mapTypeControlOptions.style = opts.controlsStyle.mapType;
         mapOptions.zoomControlOptions.style = opts.controlsStyle.zoom;
 
+        mapOptions = $.extend(mapOptions, opts.extra);
+
         // Create map and set initial options
         var $gmap = new $googlemaps.Map(this, mapOptions);
 
@@ -873,6 +875,7 @@
       fastClustering: false,
       clusterCount: 10,
       clusterSize: 40 //radius as % of viewport width
-    }
+    },
+    extra: {}
   };
 }(jQuery));
