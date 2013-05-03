@@ -48,7 +48,7 @@
     if (this.mainmarker) {return this.mainmarker; }
     var gicon, title;
     if (this.markers.length > 1) {
-      gicon = new $googlemaps.MarkerImage('http://thydzik.com/thydzikGoogleMap/markerlink.php?text=' + this.markers.length + '&color=EF9D3F');
+      gicon = new $googlemaps.MarkerImage('http://chart.googleapis.com/chart?chst=d_map_pin_letter&chld=' + this.markers.length + '%7cff776b%7c000000');
       title = 'cluster of ' + this.markers.length + ' markers';
     } else {
       gicon = new $googlemaps.MarkerImage(this.icon);
@@ -125,6 +125,8 @@
 
         mapOptions.mapTypeControlOptions.style = opts.controlsStyle.mapType;
         mapOptions.zoomControlOptions.style = opts.controlsStyle.zoom;
+
+        mapOptions = $.extend(mapOptions, opts.extra);
 
         // Create map and set initial options
         var $gmap = new $googlemaps.Map(this, mapOptions);
@@ -873,6 +875,7 @@
       fastClustering: false,
       clusterCount: 10,
       clusterSize: 40 //radius as % of viewport width
-    }
+    },
+    extra: {}
   };
 }(jQuery));
