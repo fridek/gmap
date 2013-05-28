@@ -679,6 +679,22 @@
       }
     },
 
+    removeMarker: function(marker) {
+      var markers = this.data('gmap').markers, markerKeys = this.data('gmap').markerKeys, i = markers.indexOf(marker);
+
+      if (i !== -1) {
+        markers[i].setMap(null);
+        delete markers[i];
+        markers.splice(i, 1);
+      }
+
+      for (i in markerKeys) {
+        if (markerKeys[i] === marker) {
+          delete markerKeys[i];
+        }
+      }
+    },
+
     /**
          * get marker by key, if set previously
          * @param key
