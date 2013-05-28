@@ -666,13 +666,17 @@
          *
          */
     removeAllMarkers: function() {
-      var markers = this.data('gmap').markers, i;
+      var markers = this.data('gmap').markers, markerKeys = this.data('gmap').markerKeys, i;
 
       for (i = 0; i < markers.length; i += 1) {
         markers[i].setMap(null);
         delete markers[i];
       }
       markers.length = 0;
+
+      for (i in markerKeys) {
+        delete markerKeys[i];
+      }
     },
 
     /**
