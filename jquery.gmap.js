@@ -242,28 +242,6 @@
       return methods._boundaries;
     },
 
-    _getBoundariesFromMarkers: function() {
-
-      var markers = this.data('gmap').markers, i;
-      var mostN = 1000,
-                mostE = -1000,
-                mostW = 1000,
-                mostS = -1000;
-      if (markers) {
-        for (i = 0; i < markers.length; i += 1) {
-                    if (mostN > markers[i].getPosition().lat()) {mostN = markers[i].getPosition().lat(); }
-                    if (mostE < markers[i].getPosition().lng()) {mostE = markers[i].getPosition().lng(); }
-                    if (mostW > markers[i].getPosition().lng()) {mostW = markers[i].getPosition().lng(); }
-                    if (mostS < markers[i].getPosition().lat()) {mostS = markers[i].getPosition().lat(); }
-        }
-        methods._boundaries = {N: mostN, E: mostE, W: mostW, S: mostS};
-      }
-
-      if (mostN == -1000) methods._boundaries = {N: 0, E: 0, W: 0, S: 0};
-
-      return methods._boundaries;
-    },
-
     /**
          * Priorities order:
          * - latitude & longitude in options
@@ -285,8 +263,11 @@
                 most; //hoisting
 
       if (opts.markers.length && (opts.latitude == 'fit' || opts.longitude == 'fit')) {
-        if (fromMarkers) most = methods._getBoundariesFromMarkers.apply(this);
-        else most = methods._getBoundaries(opts);
+        if (fromMarkers) {
+          opts.markers = methods._convertMarkers(data.markers);
+        }
+
+        most = methods._getBoundaries(opts);
         center = new $googlemaps.LatLng((most.N + most.S) / 2, (most.E + most.W) / 2);
         if (opts.log) {
           console.log(fromMarkers, most, center);
@@ -525,6 +506,17 @@
 
     },
 
+    _convertMarkers: function(googleMarkers) {
+      var markers = [], i;
+      for (i = 0; i < googleMarkers.length; i += 1) {
+        markers[i] = {
+                    latitude: googleMarkers[i].getPosition().lat(),
+                    longitude: googleMarkers[i].getPosition().lng()
+        };
+      }
+      return markers;
+    },
+
     _geocodeMarker: function(marker, gicon, gshadow) {
       var that = this;
       $geocoder.geocode({'address': marker.address}, function(results, status) {
@@ -552,8 +544,11 @@
                 i, boundaries, resX, resY, baseScale = 39135.758482;
       if (opts.log) {console.log('autozooming map');}
 
-      if (fromMarkers) boundaries = methods._getBoundariesFromMarkers.apply(this);
-      else boundaries = methods._getBoundaries(opts);
+      if (fromMarkers) {
+        opts.markers = methods._convertMarkers(data.markers);
+      }
+
+      boundaries = methods._getBoundaries(opts);
 
       resX = (boundaries.E - boundaries.W) * 111000 / this.width();
       resY = (boundaries.S - boundaries.N) * 111000 / this.height();
@@ -731,14 +726,13 @@
 
     changeSettings: function(options) {
       var data = this.data('gmap'),
-                markers = [], i;
-      for (i = 0; i < data.markers.length; i += 1) {
-        markers[i] = {
-                    latitude: data.markers[i].getPosition().lat(),
-                    longitude: data.markers[i].getPosition().lng()
-        };
+                markers = [], i, originalMarkers;
+      if (options.markers === undefined) {
+        options.markers = methods._convertMarkers(data.markers);
       }
-      options.markers = markers;
+      else if (options.markers.length !== 0 && options.markers[0].latitude === undefined) {
+        options.markers = methods._convertMarkers(options.markers);
+      }
 
       if (options.zoom) methods.setZoom.apply(this, [options.zoom, options]);
       if (options.latitude || options.longitude) {
