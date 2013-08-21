@@ -194,7 +194,7 @@
 					$data.gmap.setZoom(zoom);
 				}
       }
-      $data.opts.onComplete();
+      $data.opts.onComplete.apply(this, []);
     },
 
     /**
