@@ -79,26 +79,28 @@
           // Build main options before element iteration
           opts = $.extend({}, $.fn.gMap.defaults, options);
 
-                // recover icon array
-                for (k in $.fn.gMap.defaults.icon) {
+      // recover icon array
+      for (k in $.fn.gMap.defaults.icon) {
         if (!opts.icon[k]) {
           opts.icon[k] = $.fn.gMap.defaults.icon[k];
         }
-                }
+      }
 
       // Iterate through each element
       return this.each(function() {
         var $this = $(this),
-                    center = methods._getMapCenter.apply($this, [opts]),
-                    i, $data;
+            center = methods._getMapCenter.apply($this, [opts]),
+            i, $data;
 
         if (opts.zoom == 'fit') {
-					          opts.zoomFit = true;
-                    opts.zoom = methods._autoZoom.apply($this, [opts]);
+          opts.zoomFit = true;
+          opts.zoomFitOffset = opts.zoomFitOffset ? opts.zoomFitOffset : 2;
+          opts.zoom = methods._autoZoom.apply($this, [opts]);
         }
 
         var mapOptions = {
           zoom: opts.zoom,
+          zoomFitOffset: opts.zoomFitOffset,
           center: center,
           mapTypeControl: opts.mapTypeControl,
           mapTypeControlOptions: {},
@@ -194,7 +196,7 @@
 					$data.gmap.setZoom(zoom);
 				}
       }
-      $data.opts.onComplete();
+      $data.opts.onComplete.apply(this, []);
     },
 
     /**
@@ -559,7 +561,7 @@
         }
         baseScale = baseScale / 2;
       }
-      return i - 2;
+      return i - opts.zoomFitOffset;
     },
 
     /**
