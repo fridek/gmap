@@ -622,7 +622,7 @@
         if (marker.icon.shadowanchor) { _gshadow.anchor = new $googlemaps.Point(marker.icon.shadowanchor[0], marker.icon.shadowanchor[1]); }
       }
 
-      var gicon = new $googlemaps.MarkerImage(_gicon.image, _gicon.iconSize, null, _gicon.iconAnchor);
+      var gicon = new $googlemaps.MarkerImage(_gicon.image, _gicon.iconSize, null, _gicon.iconAnchor, new google.maps.Size(_gicon.iconSize['width'],_gicon.iconSize['height']));
       var gshadow = new $googlemaps.MarkerImage(_gshadow.image, _gshadow.iconSize, null, _gshadow.anchor);
 
       // Check if address is available
